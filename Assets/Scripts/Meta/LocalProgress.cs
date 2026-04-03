@@ -1,0 +1,104 @@
+using System;
+using System.IO;
+using UnityEngine;
+
+namespace StackSurge.Meta
+{
+    [Serializable]
+    public class SaveData
+    {
+        public int AllTimeHigh;
+        public string DailyDate = "";
+        public int DailyBest;
+        public string LastPlayDate = "";
+        public int Streak;
+        public int[] ChallengeBits = Array.Empty<int>();
+    }
+
+    public static class LocalProgress
+    {
+        const string FileName = "stack_surge_save.json";
+
+        static string Path => System.IO.Path.Combine(Application.persistentDataPath, FileName);
+
+        public static SaveData Load()
+        {
+            try
+            {
+                if (File.Exists(Path))
+                {
+                    var json = File.ReadAllText(Path);
+                    var d = JsonUtility.FromJson<SaveData>(json);
+                    return d ?? new SaveData();
+                }
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Load failed: " + e.Message);
+            }
+
+            return new SaveData();
+        }
+
+        public static void Save(SaveData data)
+        {
+            try
+            {
+                File.WriteAllText(Path, JsonUtility.ToJson(data, true));
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("Save failed: " + e.Message);
+            }
+        }
+
+        public static void RegisterRunEnd(int score, SaveData data)
+        {
+            var today = DateTime.Now.Date;
+            string todayStr = today.ToString("yyyy-MM-dd");
+
+            if (score > data.AllTimeHigh) data.AllTimeHigh = score;
+
+            if (data.DailyDate != todayStr)
+            {
+                data.DailyDate = todayStr;
+                data.DailyBest = score;
+            }
+            else if (score > data.DailyBest)
+            {
+                data.DailyBest = score;
+            }
+
+            UpdateStreak(data, today);
+            Save(data);
+        }
+
+        static void UpdateStreak(SaveData data, DateTime today)
+        {
+            if (string.IsNullOrEmpty(data.LastPlayDate))
+            {
+                data.Streak = 1;
+                data.LastPlayDate = today.ToString("yyyy-MM-dd");
+                return;
+            }
+
+            if (!DateTime.TryParse(data.LastPlayDate, out var last)) last = today;
+            var lastDay = last.Date;
+            if (lastDay == today)
+            {
+                return;
+            }
+
+            if (today == lastDay.AddDays(1))
+            {
+                data.Streak++;
+            }
+            else if (today > lastDay.AddDays(1))
+            {
+                data.Streak = 1;
+            }
+
+            data.LastPlayDate = today.ToString("yyyy-MM-dd");
+        }
+    }
+}
