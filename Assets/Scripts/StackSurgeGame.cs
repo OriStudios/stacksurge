@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using StackSurge.Core;
 using StackSurge.Meta;
 using StackSurge.Settings;
@@ -32,6 +33,7 @@ namespace StackSurge
         float _riseAccumulator;
         float _slowFillBuff;
         bool _playing;
+        bool _resolvingMatches;
 
         Image[,] _cellImages;
         RectTransform _gridRoot;
@@ -44,6 +46,8 @@ namespace StackSurge
         GameObject _challengesRoot;
         TextMeshProUGUI _challengesBody;
         ScreenShake _shake;
+
+        [SerializeField] float _blinkTime;
         static ChallengeDefinition[] BuildDefaultChallenges()
         {
             ChallengeDefinition C(string title, string desc, ChallengeType ty, int target)
@@ -83,7 +87,7 @@ namespace StackSurge
 
         void Update()
         {
-            if (!_playing) return;
+            if (!_playing || _resolvingMatches) return;
 
             _timeAlive += Time.deltaTime;
             _score.TickSurvivalBonus(Time.deltaTime, _board.GetOccupancy01());
@@ -95,21 +99,7 @@ namespace StackSurge
             if (_riseAccumulator >= interval)
             {
                 _riseAccumulator = 0f;
-                if (!_board.TryRiseRow(RollRisingCell))
-                {
-                    EndRun();
-                    return;
-                }
-
-                RefreshGrid();
-                int wave = _board.ResolveMatchCascade(_score, Time.time, out _, out _);
-                if (wave > 0)
-                {
-                    OnCleared(wave);
-                    RefreshGrid();
-                }
-
-                _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier, _save);
+                StartCoroutine(RiseRowAndResolve());
             }
 
             UpdateHud();
@@ -119,8 +109,8 @@ namespace StackSurge
             if (kb != null)
             {
                 if (kb.bKey.wasPressedThisFrame) _slowFillBuff = 5f;
-                if (kb.rKey.wasPressedThisFrame && _board != null && _board.TryRiseRow(RollRisingCell))
-                    RefreshGrid();
+                if (kb.rKey.wasPressedThisFrame && ! _resolvingMatches)
+                    StartCoroutine(RiseRowAndResolve());
             }
 #endif
         }
@@ -134,6 +124,7 @@ namespace StackSurge
             _riseAccumulator = 0f;
             _slowFillBuff = 0f;
             _playing = true;
+            _resolvingMatches = false;
             _current = RollIncomingTile();
             _next = RollIncomingTile();
             _gameOverRoot.SetActive(false);
@@ -157,7 +148,7 @@ namespace StackSurge
 
         public void OnColumnClicked(int col)
         {
-            if (!_playing) return;
+            if (!_playing || _resolvingMatches) return;
 
             int row = _board.GetLowestEmptyRow(col);
             if (row < 0)
@@ -172,25 +163,243 @@ namespace StackSurge
 
             if (placed == TileKind.Bomb)
             {
-                _board.ExplodeBomb3x3(col, row);
-                _board.ApplyGravity();
-                int cleared = _board.ResolveMatchCascade(_score, Time.time, out bool emptyAfter, out _);
-                if (cleared > 0) OnCleared(cleared);
-                if (emptyAfter) _slowFillBuff = _settings.SlowFillBuffSeconds;
-                RefreshGrid();
-                _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier, _save);
+                StartCoroutine(ExplodeBombAndResolve(col, row));
                 UpdateHud();
                 return;
             }
 
             _board.SetCell(col, row, placed);
-            int clearedTiles = _board.ResolveMatchCascade(_score, Time.time, out bool perfect, out _);
-            if (clearedTiles > 0) OnCleared(clearedTiles);
-            if (perfect) _slowFillBuff = _settings.SlowFillBuffSeconds;
-
             RefreshGrid();
+            UpdateHud();
+
+            StartCoroutine(ResolveMatchesAnimCoroutine());
+        }
+
+        IEnumerator ResolveMatchesAnimCoroutineInner()
+        {
+            bool emptyAfter = false;
+
+            while (true)
+            {
+                var matches = new System.Collections.Generic.HashSet<(int r, int c)>();
+                MatchFinder.CollectMatches(_board.Cells, _board.Width, _board.Height, matches, out int largestInWave);
+                if (matches.Count == 0) break;
+
+                // Animate/blink tiles before clearing
+                float blinkTime = _blinkTime;
+                float elapsed = 0f;
+                while (elapsed < blinkTime)
+                {
+                    elapsed += Time.deltaTime;
+                    bool flashToggle = (int)(elapsed / 0.05f) % 2 == 0;
+                    foreach (var m in matches)
+                    {
+                        if (flashToggle)
+                            _cellImages[m.r, m.c].color = Color.white;
+                        else
+                            _cellImages[m.r, m.c].color = ColorFor(_board.Cells[m.r, m.c]);
+                    }
+                    yield return null;
+                }
+
+                bool hasFullRow = HasEntireRowInMatch(matches);
+                int cleared = matches.Count;
+
+                foreach (var m in matches)
+                {
+                    _board.Cells[m.r, m.c] = TileKind.Empty;
+                    _cellImages[m.r, m.c].color = ColorFor(TileKind.Empty);
+                }
+
+                yield return AnimateGravityCoroutine();
+
+                bool perfect = _board.IsBoardEmpty();
+                _score.RegisterClearWave(largestInWave, cleared, hasFullRow, perfect, Time.time, out _);
+
+                OnCleared(cleared);
+                RefreshGrid();
+                UpdateHud();
+
+                yield return new WaitForSeconds(0.1f);
+
+                if (perfect)
+                {
+                    emptyAfter = true;
+                    break;
+                }
+            }
+
+            if (emptyAfter) _slowFillBuff = _settings.SlowFillBuffSeconds;
+
             _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier, _save);
             UpdateHud();
+        }
+
+        bool HasEntireRowInMatch(System.Collections.Generic.HashSet<(int r, int c)> matchSet)
+        {
+            for (int r = 0; r < _board.Height; r++)
+            {
+                bool ok = true;
+                for (int c = 0; c < _board.Width; c++)
+                {
+                    if (!matchSet.Contains((r, c)))
+                    {
+                        ok = false;
+                        break;
+                    }
+                }
+                if (ok) return true;
+            }
+            return false;
+        }
+
+        IEnumerator AnimateGravityCoroutine()
+        {
+            int[,] fallDistances = new int[_settings.Rows, _settings.Columns];
+            bool anyFalls = false;
+            for (int c = 0; c < _settings.Columns; c++)
+            {
+                int emptySum = 0;
+                for (int r = 0; r < _settings.Rows; r++)
+                {
+                    if (_board.Cells[r, c] == TileKind.Empty) 
+                        emptySum++;
+                    else if (emptySum > 0)
+                    {
+                        fallDistances[r, c] = emptySum;
+                        anyFalls = true;
+                    }
+                }
+            }
+
+            _board.ApplyGravity();
+
+            if (anyFalls)
+            {
+                float fallTime = 0.2f;
+                float fElapsed = 0f;
+                float cellH = 900f / _settings.Rows;
+                float cw = 700f / _settings.Columns;
+                
+                while (fElapsed < fallTime)
+                {
+                    fElapsed += Time.deltaTime;
+                    float t = Mathf.Clamp01(fElapsed / fallTime);
+                    float easedT = t * t; // accelerate like gravity
+                    
+                    for (int r = 0; r < _settings.Rows; r++)
+                    for (int c = 0; c < _settings.Columns; c++)
+                    {
+                        if (fallDistances[r, c] > 0)
+                        {
+                            float startY = r * cellH + 2f;
+                            float endY = (r - fallDistances[r, c]) * cellH + 2f;
+                            _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(
+                                c * cw + 2f, 
+                                Mathf.Lerp(startY, endY, easedT)
+                            );
+                        }
+                    }
+                    yield return null;
+                }
+                
+                for (int r = 0; r < _settings.Rows; r++)
+                for (int c = 0; c < _settings.Columns; c++)
+                {
+                    if (fallDistances[r, c] > 0)
+                    {
+                        _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(
+                            c * cw + 2f, 
+                            r * cellH + 2f
+                        );
+                    }
+                }
+            }
+        }
+
+        IEnumerator ResolveMatchesAnimCoroutine()
+        {
+            _resolvingMatches = true;
+            yield return ResolveMatchesAnimCoroutineInner();
+            _resolvingMatches = false;
+        }
+
+        IEnumerator ExplodeBombAndResolve(int col, int row)
+        {
+            _resolvingMatches = true;
+            _board.SetCell(col, row, TileKind.Bomb);
+            RefreshGrid();
+
+            // Blink bomb area
+            float blinkTime = 0.25f;
+            float elapsed = 0f;
+            while (elapsed < blinkTime)
+            {
+                elapsed += Time.deltaTime;
+                bool flashToggle = (int)(elapsed / 0.05f) % 2 == 0;
+                for (int dc = -1; dc <= 1; dc++)
+                for (int dr = -1; dr <= 1; dr++)
+                {
+                    int cc = col + dc;
+                    int rr = row + dr;
+                    if (cc < 0 || cc >= _board.Width || rr < 0 || rr >= _board.Height) continue;
+                    if (_board.Cells[rr, cc] == TileKind.Empty) continue;
+                    
+                    if (flashToggle)
+                        _cellImages[rr, cc].color = Color.white;
+                    else
+                        _cellImages[rr, cc].color = ColorFor(_board.Cells[rr, cc]);
+                }
+                yield return null;
+            }
+
+            _board.ExplodeBomb3x3(col, row);
+            
+            for (int r = 0; r < _settings.Rows; r++)
+            for (int c = 0; c < _settings.Columns; c++)
+                if (_board.Cells[r, c] == TileKind.Empty)
+                    _cellImages[r, c].color = ColorFor(TileKind.Empty);
+
+            yield return AnimateGravityCoroutine();
+            RefreshGrid();
+
+            yield return ResolveMatchesAnimCoroutineInner();
+            _resolvingMatches = false;
+        }
+
+        IEnumerator RiseRowAndResolve()
+        {
+            _resolvingMatches = true;
+
+            if (!_board.TryRiseRow(RollRisingCell))
+            {
+                EndRun();
+                yield break;
+            }
+
+            RefreshGrid();
+
+            float slideTime = 0.2f;
+            float elapsed = 0f;
+            float cellH = 900f / _settings.Rows; // default logical height
+
+            while (elapsed < slideTime)
+            {
+                elapsed += Time.deltaTime;
+                float t = elapsed / slideTime;
+                
+                // Use a curve so it feels a bit punchy but smooth
+                float easedT = 1f - (1f - t) * (1f - t); 
+                
+                float yOffset = Mathf.Lerp(-cellH, 0f, easedT);
+                _gridRoot.anchoredPosition = new Vector2(0, yOffset);
+                yield return null;
+            }
+
+            _gridRoot.anchoredPosition = Vector2.zero;
+
+            yield return ResolveMatchesAnimCoroutineInner();
+            _resolvingMatches = false;
         }
 
         void OnCleared(int tileCount)
@@ -343,13 +552,22 @@ namespace StackSurge
                 "to clear them (they will disappear and you score). " +
                 "New rows also push up on a timer—don’t let the top overflow!";
 
+            var gridMaskGo = new GameObject("GridMask");
+            gridMaskGo.transform.SetParent(root.transform, false);
+            var maskRt = gridMaskGo.AddComponent<RectTransform>();
+            maskRt.anchorMin = new Vector2(0.5f, 0.5f);
+            maskRt.anchorMax = new Vector2(0.5f, 0.5f);
+            maskRt.sizeDelta = new Vector2(700, 900);
+            maskRt.anchoredPosition = new Vector2(0, -80);
+            gridMaskGo.AddComponent<UnityEngine.UI.RectMask2D>();
+
             var gridGo = new GameObject("Grid");
-            gridGo.transform.SetParent(root.transform, false);
+            gridGo.transform.SetParent(gridMaskGo.transform, false);
             _gridRoot = gridGo.AddComponent<RectTransform>();
-            _gridRoot.anchorMin = new Vector2(0.5f, 0.5f);
-            _gridRoot.anchorMax = new Vector2(0.5f, 0.5f);
-            _gridRoot.sizeDelta = new Vector2(700, 900);
-            _gridRoot.anchoredPosition = new Vector2(0, -80);
+            _gridRoot.anchorMin = Vector2.zero;
+            _gridRoot.anchorMax = Vector2.one;
+            _gridRoot.offsetMin = Vector2.zero;
+            _gridRoot.offsetMax = Vector2.zero;
 
             _cellImages = new Image[_settings.Rows, _settings.Columns];
             float cw = 700f / _settings.Columns;
