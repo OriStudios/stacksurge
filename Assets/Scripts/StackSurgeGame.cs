@@ -178,10 +178,10 @@ namespace StackSurge
         IEnumerator ResolveMatchesAnimCoroutineInner()
         {
             bool emptyAfter = false;
+            var matches = new System.Collections.Generic.HashSet<(int r, int c)>();
 
             while (true)
             {
-                var matches = new System.Collections.Generic.HashSet<(int r, int c)>();
                 MatchFinder.CollectMatches(_board.Cells, _board.Width, _board.Height, matches, out int largestInWave);
                 if (matches.Count == 0) break;
 

@@ -407,6 +407,7 @@ MonoBehaviour:
   m_EditorClassIdentifier: Assembly-CSharp::StackSurge.StackSurgeGame
   _settings: {fileID: 0}
   _challengeAssets: []
+  _blinkTime: 1
 --- !u!4 &2019675946
 Transform:
   m_ObjectHideFlags: 0
