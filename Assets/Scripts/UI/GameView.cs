@@ -70,6 +70,7 @@ namespace StackSurge.UI
             for (int c = 0; c < _settings.Columns; c++)
             {
                 SetCellColor(r, c, cells[r, c]);
+                _cellImages[r, c].rectTransform.localScale = Vector3.one;
             }
         }
 
@@ -93,13 +94,14 @@ namespace StackSurge.UI
             while (elapsed < blinkTime)
             {
                 elapsed += Time.deltaTime;
-                bool flashToggle = (int)(elapsed / 0.05f) % 2 == 0;
+                float t = Mathf.Clamp01(elapsed / blinkTime);
+                float easeInExp = t == 1f ? 1f : Mathf.Pow(2f, 10f * t - 10f); // Quick pop out
+
                 foreach (var m in tiles)
                 {
-                    if (flashToggle)
-                        _cellImages[m.r, m.c].color = Color.white;
-                    else
-                        _cellImages[m.r, m.c].color = ColorFor(boardCells[m.r, m.c]);
+                    var baseColor = ColorFor(boardCells[m.r, m.c]);
+                    _cellImages[m.r, m.c].color = Color.Lerp(baseColor, Color.white, Mathf.Sin(t * Mathf.PI));
+                    _cellImages[m.r, m.c].rectTransform.localScale = Vector3.Lerp(Vector3.one, Vector3.zero, easeInExp);
                 }
                 yield return null;
             }
@@ -140,7 +142,7 @@ namespace StackSurge.UI
 
             if (!anyFalls) yield break;
 
-            float fallTime = 0.2f;
+            float fallTime = 0.35f; // Slower for nicer bounce visual
             float fElapsed = 0f;
             float cellH = 900f / _settings.Rows;
             float cw = 700f / _settings.Columns;
@@ -149,7 +151,7 @@ namespace StackSurge.UI
             {
                 fElapsed += Time.deltaTime;
                 float t = Mathf.Clamp01(fElapsed / fallTime);
-                float easedT = t * t; 
+                float easedT = BounceEaseOut(t); 
                 
                 for (int r = 0; r < _settings.Rows; r++)
                 for (int c = 0; c < _settings.Columns; c++)
@@ -160,7 +162,7 @@ namespace StackSurge.UI
                         float endY = (r - fallDistances[r, c]) * cellH + 2f;
                         _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(
                             c * cw + 2f, 
-                            Mathf.Lerp(startY, endY, easedT)
+                            Mathf.LerpUnclamped(startY, endY, easedT)
                         );
                     }
                 }
@@ -188,16 +190,29 @@ namespace StackSurge.UI
             while (elapsed < slideTime)
             {
                 elapsed += Time.deltaTime;
-                float t = elapsed / slideTime;
+                float t = Mathf.Clamp01(elapsed / slideTime);
+                float easedT = BackEaseOut(t); 
                 
-                float easedT = 1f - (1f - t) * (1f - t); 
-                
-                float yOffset = Mathf.Lerp(-cellH, 0f, easedT);
+                float yOffset = Mathf.LerpUnclamped(-cellH, 0f, easedT);
                 _gridRoot.anchoredPosition = new Vector2(0, yOffset);
                 yield return null;
             }
 
             _gridRoot.anchoredPosition = Vector2.zero;
+        }
+
+        static float BounceEaseOut(float t)
+        {
+            if (t < 1f / 2.75f) return 7.5625f * t * t;
+            if (t < 2f / 2.75f) return 7.5625f * (t -= 1.5f / 2.75f) * t + 0.75f;
+            if (t < 2.5f / 2.75f) return 7.5625f * (t -= 2.25f / 2.75f) * t + 0.9375f;
+            return 7.5625f * (t -= 2.625f / 2.75f) * t + 0.984375f;
+        }
+
+        static float BackEaseOut(float t)
+        {
+            float s = 1.70158f;
+            return (t -= 1f) * t * ((s + 1f) * t + s) + 1f;
         }
 
         string PlacedName(TileKind k) =>
