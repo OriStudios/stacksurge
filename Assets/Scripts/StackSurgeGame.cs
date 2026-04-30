@@ -63,13 +63,24 @@ namespace StackSurge
             var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
             _challenges = new ChallengeTracker(defs);
 
+            // Match camera background to loading screen color to prevent first-frame flash
+            var cam = Camera.main;
+            if (cam != null)
+            {
+                cam.clearFlags = CameraClearFlags.SolidColor;
+                cam.backgroundColor = new Color(0.04f, 0.04f, 0.06f, 1f);
+            }
+
             _view = gameObject.AddComponent<GameView>();
             _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengesText);
+
+            // Game starts only after loading screen finishes fading
+            _view.OnLoadingDone = BeginRun;
         }
 
         void Start()
         {
-            BeginRun();
+            // Game no longer starts here — it starts when the loading screen completes
         }
 
         void Update()
@@ -329,8 +340,8 @@ namespace StackSurge
             float graceLeft = Mathf.Max(0f, _settings.InitialRiseGraceSeconds - _timeAlive);
             
             string riseLine = graceLeft > 0f
-                ? $"First auto rise in: {graceLeft:0.0}s"
-                : $"Next auto rise: {nextRise:0.0}s";
+                ? $"Auto-rise starts in: {graceLeft:0.0}s"
+                : $"Next auto-rise: {nextRise:0.0}s";
 
             string timeStr = FormatTime(_timeAlive);
             float wildChance = DifficultyCurve.GetWildChance(_timeAlive) * 100f;
