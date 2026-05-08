@@ -17,22 +17,31 @@ namespace StackSurge.UI
         StackSurgeSettings _settings;
         Image[,] _cellImages;
         RectTransform _gridRoot;
-        TextMeshProUGUI _scoreText;
-        TextMeshProUGUI _hudText;
+        [SerializeField] TextMeshProUGUI _scoreText;
+        [SerializeField] TextMeshProUGUI _hudText;
         
         // Visual Previews
-        Image _nextPreviewImg;
-        Image _queuedPreviewImg;
-        TextMeshProUGUI _nextLabel;
-        TextMeshProUGUI _queuedLabel;
+        [SerializeField] Image _nextPreviewImg;
+        [SerializeField] Image _queuedPreviewImg;
+        [SerializeField] TextMeshProUGUI _nextInnerLabel;
+        [SerializeField] TextMeshProUGUI _queuedInnerLabel;
 
-        TextMeshProUGUI _helpText;
-        GameObject _hudRoot;
-        GameObject _gameOverRoot;
-        GameObject _loadingRoot;
-        TextMeshProUGUI _gameOverScore;
-        GameObject _challengesRoot;
-        TextMeshProUGUI _challengesBody;
+        [SerializeField] TextMeshProUGUI _helpText;
+        [SerializeField] Canvas _mainCanvas;
+        [SerializeField] GameObject _hudRoot;
+        [SerializeField] GameObject _loadingRoot;
+        [SerializeField] TextMeshProUGUI _loadingTitleText;
+        [SerializeField] TextMeshProUGUI _loadingStatusText;
+        [SerializeField] Image[] _loadingGlows;
+        [SerializeField] GameObject _gameOverRoot;
+        [SerializeField] TextMeshProUGUI _gameOverScore;
+        [SerializeField] Button _retryButton;
+        [SerializeField] Button _shareButton;
+
+        [SerializeField] GameObject _challengesRoot;
+        [SerializeField] TextMeshProUGUI _challengesBody;
+        [SerializeField] Button _challengesButton;
+        [SerializeField] Button _helpButton;
         ScreenShake _shake;
 
         Action<int> _onColumnClicked;
@@ -54,6 +63,11 @@ namespace StackSurge.UI
             BuildUi();
             
             DOTween.SetTweensCapacity(500, 50);
+            _retryButton.onClick.AddListener(Retry);
+            _shareButton.onClick.AddListener(Share);
+
+            if (_challengesButton != null) _challengesButton.onClick.AddListener(ToggleChallenges);
+            if (_helpButton != null) _helpButton.onClick.AddListener(ToggleHelp);
         }
 
         public void UpdateHud(int score, string timeStr, string riseLine, float wildChance, TileKind current, TileKind next)
@@ -71,13 +85,16 @@ namespace StackSurge.UI
                 $"Time: <color=#A0A0A0>{timeStr}</color>\n" +
                 $"<color=#60A5FA>{riseLine}</color>";
             
-            UpdatePreviewSquare(_nextPreviewImg, _nextLabel, current);
-            UpdatePreviewSquare(_queuedPreviewImg, _queuedLabel, next);
+            UpdatePreviewSquare(_nextPreviewImg, _nextInnerLabel, current);
+            UpdatePreviewSquare(_queuedPreviewImg, _queuedInnerLabel, next);
         }
 
         private void UpdatePreviewSquare(Image img, TextMeshProUGUI label, TileKind k)
         {
+            if (img == null || label == null) return;
+
             img.color = ColorFor(k);
+
             if (k == TileKind.Wild)
             {
                 label.text = "WILD";
@@ -119,8 +136,27 @@ namespace StackSurge.UI
 
         public void HideGameOver()
         {
-            _gameOverRoot.SetActive(false);
-            _hudRoot.SetActive(true);
+            if (_gameOverRoot != null) _gameOverRoot.SetActive(false);
+            if (_hudRoot != null) _hudRoot.SetActive(true);
+        }
+
+        public void Retry() => _onRetry?.Invoke();
+        public void Share() => _onShare?.Invoke();
+
+        public void ToggleHelp()
+        {
+            if (_helpText != null) _helpText.gameObject.SetActive(!_helpText.gameObject.activeSelf);
+        }
+
+        public void ToggleChallenges()
+        {
+            if (_challengesRoot == null) return;
+            bool active = !_challengesRoot.activeSelf;
+            _challengesRoot.SetActive(active);
+            if (active && _getChallengesText != null)
+            {
+                _challengesBody.text = _getChallengesText();
+            }
         }
 
         public void RefreshGrid(TileKind[,] cells)
@@ -268,84 +304,20 @@ namespace StackSurge.UI
 
         void BuildUi()
         {
-            var canvasGo = new GameObject("Canvas");
-            var canvas = canvasGo.AddComponent<Canvas>();
-            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            var scaler = canvasGo.AddComponent<CanvasScaler>();
-            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
-            scaler.referenceResolution = new Vector2(1080, 1920);
-            scaler.matchWidthOrHeight = 0.5f;
-            canvasGo.AddComponent<GraphicRaycaster>();
+            if (_mainCanvas != null)
+            {
+                _shake = _mainCanvas.gameObject.GetComponent<ScreenShake>();
+                if (_shake == null) _shake = _mainCanvas.gameObject.AddComponent<ScreenShake>();
+                _shake.Target = _mainCanvas.transform;
+            }
 
-            _shake = canvasGo.AddComponent<ScreenShake>();
-            _shake.Target = canvasGo.transform;
+            if (_hudRoot != null)
+            {
+                _hudRoot.SetActive(true);
+            }
 
-            var root = new GameObject("Root");
-            root.transform.SetParent(canvasGo.transform, false);
-            var rootRt = root.AddComponent<RectTransform>();
-            rootRt.anchorMin = Vector2.zero;
-            rootRt.anchorMax = Vector2.one;
-            rootRt.offsetMin = Vector2.zero;
-            rootRt.offsetMax = Vector2.zero;
 
-            // Dark Background
-            var bgGo = new GameObject("Background");
-            bgGo.transform.SetParent(root.transform, false);
-            var bgRt = bgGo.AddComponent<RectTransform>();
-            bgRt.anchorMin = Vector2.zero;
-            bgRt.anchorMax = Vector2.one;
-            bgRt.sizeDelta = Vector2.zero;
-            bgGo.AddComponent<Image>().color = new Color(0.06f, 0.06f, 0.08f, 1f);
-
-            // HUD Root (holds all gameplay elements)
-            _hudRoot = new GameObject("HudRoot");
-            _hudRoot.transform.SetParent(root.transform, false);
-            var hrt_root = _hudRoot.AddComponent<RectTransform>();
-            hrt_root.anchorMin = Vector2.zero;
-            hrt_root.anchorMax = Vector2.one;
-            hrt_root.offsetMin = Vector2.zero;
-            hrt_root.offsetMax = Vector2.zero;
-
-            // Score Panel (Dark Glass)
-            var scorePanel = CreatePanel(_hudRoot.transform, "ScorePanel", new Vector2(0.5f, 1f), new Vector2(0.5f, 1f),
-                new Vector2(0, -180), new Vector2(600, 240));
-            scorePanel.GetComponent<Image>().color = new Color(0.15f, 0.15f, 0.2f, 0.8f);
-            
-            _scoreText = CreateTmp(scorePanel.transform, "Score", 140, FontStyles.Bold, TextAlignmentOptions.Center);
-            _scoreText.rectTransform.anchoredPosition = new Vector2(0, 0);
-            _scoreText.color = Color.white;
-            
-            _hudText = CreateTmp(_hudRoot.transform, "Hud", 40, FontStyles.Normal, TextAlignmentOptions.Center);
-            _hudText.rectTransform.anchoredPosition = new Vector2(0, -320);
-            _hudText.color = new Color(0.7f, 0.7f, 0.7f, 1f);
-
-            // Preview Section (Left Side)
-            var previewRoot = new GameObject("Previews");
-            previewRoot.transform.SetParent(_hudRoot.transform, false);
-            var prt = previewRoot.AddComponent<RectTransform>();
-            prt.anchorMin = new Vector2(0, 1);
-            prt.anchorMax = new Vector2(0, 1);
-            prt.pivot = new Vector2(0, 1);
-            prt.anchoredPosition = new Vector2(40, -100);
-            prt.sizeDelta = new Vector2(240, 500);
-
-            _nextPreviewImg = CreatePreviewSlot(previewRoot.transform, "NEXT TILE", new Vector2(0, 0), out _nextLabel);
-            _queuedPreviewImg = CreatePreviewSlot(previewRoot.transform, "QUEUED", new Vector2(0, -220), out _queuedLabel);
-
-            // Help Button (Top Right)
-            var helpBtn = CreateButton(_hudRoot.transform, "?", new Vector2(460, -80), () => _helpText.gameObject.SetActive(!_helpText.gameObject.activeSelf));
-            var hrt = helpBtn.GetComponent<RectTransform>();
-            hrt.anchorMin = hrt.anchorMax = new Vector2(0.5f, 1f);
-            hrt.sizeDelta = new Vector2(100, 100);
-            helpBtn.GetComponent<Image>().color = new Color(0.15f, 0.15f, 0.2f, 0.8f);
-            helpBtn.GetComponentInChildren<TextMeshProUGUI>().color = Color.white;
-
-            _helpText = CreateTmp(_hudRoot.transform, "HelpOverlay", 32, FontStyles.Normal, TextAlignmentOptions.Center);
-            _helpText.color = new Color(0.9f, 0.9f, 0.95f, 0.95f);
-            _helpText.rectTransform.sizeDelta = new Vector2(900, 400);
-            _helpText.rectTransform.anchoredPosition = new Vector2(0, -600);
-            _helpText.text = "Tap columns to drop tiles.\nMatch 3+ to clear!";
-            _helpText.gameObject.SetActive(false);
+            if (_helpText != null) _helpText.gameObject.SetActive(false);
 
             var gridMaskGo = new GameObject("GridMask");
             gridMaskGo.transform.SetParent(_hudRoot.transform, false);
@@ -424,62 +396,21 @@ namespace StackSurge.UI
                 lt.raycastTarget = false;
             }
 
-            _gameOverRoot = CreatePanel(root.transform, "GameOver", Vector2.zero, Vector2.one,
-                Vector2.zero, Vector2.zero); // Fullscreen stretch
-            _gameOverRoot.AddComponent<CanvasGroup>();
-            _gameOverRoot.GetComponent<Image>().color = new Color(0.05f, 0.05f, 0.08f, 0.98f);
-            
-            // Fix Game Over Text Layout (Refined Spacing)
-            var goTitle = CreateTmp(_gameOverRoot.transform, "Title", 120, FontStyles.Bold, TextAlignmentOptions.Center);
-            goTitle.text = "GAME OVER";
-            goTitle.color = Color.white;
-            goTitle.rectTransform.anchorMin = goTitle.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            goTitle.rectTransform.sizeDelta = new Vector2(900, 200);
-            goTitle.rectTransform.anchoredPosition = new Vector2(0, 550);
-            
-            _gameOverScore = CreateTmp(_gameOverRoot.transform, "GOScore", 54, FontStyles.Normal, TextAlignmentOptions.Center);
-            _gameOverScore.color = Color.white;
-            _gameOverScore.rectTransform.anchorMin = _gameOverScore.rectTransform.anchorMax = new Vector2(0.5f, 0.5f);
-            _gameOverScore.rectTransform.sizeDelta = new Vector2(900, 500);
-            _gameOverScore.rectTransform.anchoredPosition = new Vector2(0, 150);
-
-            CreateButton(_gameOverRoot.transform, "RETRY", new Vector2(0, -350), () => _onRetry?.Invoke());
-            CreateButton(_gameOverRoot.transform, "SHARE", new Vector2(0, -500), () => _onShare?.Invoke());
-
-            _gameOverRoot.SetActive(false);
-
-            // Challenges Button (Bottom Right)
+            if (_gameOverRoot != null)
             {
-                var chBtn = CreateButton(root.transform, "Challenges", new Vector2(400, 100), ToggleChallengesClick);
-                var crt = chBtn.GetComponent<RectTransform>();
-                crt.anchorMin = crt.anchorMax = new Vector2(0.5f, 0f);
-                crt.sizeDelta = new Vector2(250, 100);
-                chBtn.GetComponent<Image>().color = new Color(0.15f, 0.15f, 0.2f, 0.8f);
-                chBtn.GetComponentInChildren<TextMeshProUGUI>().text = "TROPHY"; // No emoji to avoid font error
-                chBtn.GetComponentInChildren<TextMeshProUGUI>().fontSize = 32;
+                _gameOverRoot.SetActive(false);
+                if (_gameOverRoot.GetComponent<CanvasGroup>() == null)
+                    _gameOverRoot.AddComponent<CanvasGroup>();
             }
-            
-            _challengesRoot = CreatePanel(root.transform, "ChallengesPanel", new Vector2(0.5f, 0.5f), new Vector2(0.5f, 0.5f),
-                Vector2.zero, new Vector2(950, 1300));
-            _challengesRoot.GetComponent<Image>().color = new Color(0.08f, 0.08f, 0.12f, 0.98f);
-            
-            var chTitle = CreateTmp(_challengesRoot.transform, "Title", 80, FontStyles.Bold, TextAlignmentOptions.Center);
-            chTitle.text = "CHALLENGES";
-            chTitle.color = Color.white;
-            chTitle.rectTransform.anchoredPosition = new Vector2(0, 560);
-            
-            _challengesBody = CreateTmp(_challengesRoot.transform, "Body", 36, FontStyles.Normal, TextAlignmentOptions.TopLeft);
-            _challengesBody.color = Color.white;
-            _challengesBody.rectTransform.anchorMin = new Vector2(0, 1);
-            _challengesBody.rectTransform.anchorMax = new Vector2(1, 1);
-            _challengesBody.rectTransform.pivot = new Vector2(0.5f, 1);
-            _challengesBody.rectTransform.offsetMin = new Vector2(80, 200);
-            _challengesBody.rectTransform.offsetMax = new Vector2(-80, -200);
-            
-            CreateButton(_challengesRoot.transform, "CLOSE", new Vector2(0, -560), () => _challengesRoot.SetActive(false));
-            _challengesRoot.SetActive(false);
 
-            BuildLoadingScreen(canvasGo.transform);
+            if (_mainCanvas != null)
+            {
+                BuildLoadingScreen(_mainCanvas.transform);
+            }
+            else
+            {
+                BuildLoadingScreen(transform);
+            }
         }
 
         private Image CreatePreviewSlot(Transform parent, string label, Vector2 pos, out TextMeshProUGUI innerLabel)
@@ -531,15 +462,6 @@ namespace StackSurge.UI
             return img;
         }
 
-        void ToggleChallengesClick()
-        {
-            bool on = !_challengesRoot.activeSelf;
-            _challengesRoot.SetActive(on);
-            if (on && _getChallengesText != null)
-            {
-                _challengesBody.text = _getChallengesText();
-            }
-        }
 
         GameObject CreatePanel(Transform parent, string name, Vector2 anchorMin, Vector2 anchorMax, Vector2 pos, Vector2 size)
         {
@@ -609,74 +531,62 @@ namespace StackSurge.UI
             // FREEZE THE GAME: This is the ONLY way to guarantee the game timer doesn't tick during load.
             Time.timeScale = 0f;
 
-            _loadingRoot = new GameObject("LoadingScreen");
+            if (_loadingRoot == null)
+            {
+                Debug.LogError("Loading Root is not assigned in the Inspector!");
+                return;
+            }
+
+            _loadingRoot.SetActive(true);
             _loadingRoot.transform.SetParent(parent, false);
-            _loadingRoot.transform.SetAsLastSibling(); // Force it to the front
-            
-            var rt = _loadingRoot.AddComponent<RectTransform>();
-            rt.anchorMin = Vector2.zero;
-            rt.anchorMax = Vector2.one;
-            rt.sizeDelta = Vector2.zero;
-            rt.anchoredPosition = Vector2.zero;
-            
-            var cg = _loadingRoot.AddComponent<CanvasGroup>();
-            cg.alpha = 1f; // Force absolute opacity
+            _loadingRoot.transform.SetAsLastSibling();
 
-            // Dedicated background child to ensure perfect opacity and layering
-            var bgGo = new GameObject("Background");
-            bgGo.transform.SetParent(_loadingRoot.transform, false);
-            var bgRt = bgGo.AddComponent<RectTransform>();
-            bgRt.anchorMin = Vector2.zero;
-            bgRt.anchorMax = Vector2.one;
-            bgRt.sizeDelta = Vector2.zero;
-            var bgImg = bgGo.AddComponent<Image>();
-            bgImg.color = new Color(0.04f, 0.04f, 0.06f, 1f);
-            bgImg.raycastTarget = true;
+            var cg = _loadingRoot.GetComponent<CanvasGroup>();
+            if (cg != null) cg.alpha = 1f;
 
-            var startBtn = _loadingRoot.AddComponent<Button>();
-            startBtn.interactable = false;
-            startBtn.onClick.AddListener(() => {
+            // Hook up the Button
+            var startBtn = _loadingRoot.GetComponent<Button>();
+            if (startBtn != null)
+            {
                 startBtn.interactable = false;
-                Time.timeScale = 1f; // UNFREEZE THE GAME
-                HideLoadingScreen(1.2f);
-            });
+                startBtn.onClick.RemoveAllListeners();
+                startBtn.onClick.AddListener(() => {
+                    startBtn.interactable = false;
+                    Time.timeScale = 1f; // UNFREEZE THE GAME
+                    HideLoadingScreen(1.2f);
+                });
+            }
 
-            // Layered Depth Glow (from the 2.0 version)
-            CreateGlow(_loadingRoot.transform, new Color(0.4f, 0.7f, 1.0f, 0.08f), 800, 2.5f);
-            CreateGlow(_loadingRoot.transform, new Color(0.8f, 0.4f, 1.0f, 0.04f), 1000, 4.0f);
+            // Animate Title
+            if (_loadingTitleText != null)
+            {
+                _loadingTitleText.transform.DOKill();
+                _loadingTitleText.transform.localScale = Vector3.one;
+                _loadingTitleText.transform.DOScale(1.04f, 3f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+            }
 
-            var titleGo = new GameObject("Title");
-            titleGo.transform.SetParent(_loadingRoot.transform, false);
-            var trt = titleGo.AddComponent<RectTransform>();
-            trt.sizeDelta = new Vector2(1200, 300);
-            
-            var title = titleGo.AddComponent<TextMeshProUGUI>();
-            title.text = "STACK SURGE";
-            title.fontSize = 84;
-            title.fontStyle = FontStyles.Bold;
-            title.alignment = TextAlignmentOptions.Center;
-            title.characterSpacing = 25; 
-            title.color = Color.white;
-            title.transform.DOScale(1.04f, 3f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
-
-            var subGo = new GameObject("Subtitle");
-            subGo.transform.SetParent(_loadingRoot.transform, false);
-            var sub = subGo.AddComponent<TextMeshProUGUI>();
-            sub.text = "INITIALIZING CORE SYSTEM";
-            sub.fontSize = 20;
-            sub.fontStyle = FontStyles.Bold;
-            sub.alignment = TextAlignmentOptions.Center;
-            sub.characterSpacing = 10;
-            sub.color = new Color(1, 1, 1, 0.3f);
-            sub.rectTransform.anchoredPosition = new Vector2(0, -120);
+            // Animate Glows
+            if (_loadingGlows != null && _loadingGlows.Length > 0)
+            {
+                foreach (var glow in _loadingGlows)
+                {
+                    if (glow == null) continue;
+                    glow.transform.DOKill();
+                    float baseAlpha = glow.color.a;
+                    glow.DOFade(baseAlpha * 0.5f, 3f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                    glow.rectTransform.DOScale(1.15f, 3.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                }
+            }
 
             // Transition to 'TAP TO START' after initialization delay
             DG.Tweening.DOVirtual.DelayedCall(2.0f, () => {
-                if (sub == null) return;
-                sub.text = "TAP TO START";
-                sub.color = new Color(0.4f, 0.8f, 1.0f, 0.8f);
-                sub.transform.DOScale(1.1f, 0.8f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
-                startBtn.interactable = true;
+                if (_loadingStatusText != null)
+                {
+                    _loadingStatusText.text = "TAP TO START";
+                    _loadingStatusText.color = new Color(0.4f, 0.8f, 1.0f, 0.8f);
+                    _loadingStatusText.transform.DOScale(1.1f, 0.8f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                }
+                if (startBtn != null) startBtn.interactable = true;
             }).SetUpdate(true);
         }
 

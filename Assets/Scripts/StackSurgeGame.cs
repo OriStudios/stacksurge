@@ -18,7 +18,7 @@ namespace StackSurge
         [SerializeField] StackSurgeSettings _settings;
         [SerializeField] ChallengeDefinition[] _challengeAssets;
 
-        GameView _view;
+        [SerializeField] GameView _view;
         GameBoard _board;
         ScoreService _score;
         SaveData _save;
@@ -71,7 +71,8 @@ namespace StackSurge
                 cam.backgroundColor = new Color(0.04f, 0.04f, 0.06f, 1f);
             }
 
-            _view = gameObject.AddComponent<GameView>();
+            if (_view == null) _view = GetComponent<GameView>();
+            if (_view == null) _view = gameObject.AddComponent<GameView>();
             _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengesText);
 
             // Game starts only after loading screen finishes fading
