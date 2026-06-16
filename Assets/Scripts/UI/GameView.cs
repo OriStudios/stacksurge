@@ -26,7 +26,8 @@ namespace StackSurge.UI
         [SerializeField] TextMeshProUGUI _nextInnerLabel;
         [SerializeField] TextMeshProUGUI _queuedInnerLabel;
 
-        [SerializeField] TextMeshProUGUI _helpText;
+        [SerializeField] GameObject _helpPanel;
+        [SerializeField] Button _closeHelpButton;
         [SerializeField] Canvas _mainCanvas;
         [SerializeField] GameObject _hudRoot;
         [SerializeField] GameObject _loadingRoot;
@@ -50,6 +51,11 @@ namespace StackSurge.UI
         Func<string> _getChallengesText;
 
         private int _lastScore = 0;
+
+        void Awake()
+        {
+            if(_closeHelpButton != null) _closeHelpButton.onClick.AddListener(ToggleHelp);
+        }
 
         public void Build(StackSurgeSettings settings, Action<int> onColumnClicked, Action onRetry, Action onShare, Func<string> getChallengesText)
         {
@@ -145,7 +151,7 @@ namespace StackSurge.UI
 
         public void ToggleHelp()
         {
-            if (_helpText != null) _helpText.gameObject.SetActive(!_helpText.gameObject.activeSelf);
+            if (_helpPanel != null) _helpPanel.SetActive(!_helpPanel.activeSelf);
         }
 
         public void ToggleChallenges()
@@ -153,9 +159,22 @@ namespace StackSurge.UI
             if (_challengesRoot == null) return;
             bool active = !_challengesRoot.activeSelf;
             _challengesRoot.SetActive(active);
+            
+            // Pause/resume the game
+            Time.timeScale = active ? 0f : 1f;
+            
             if (active && _getChallengesText != null)
             {
                 _challengesBody.text = _getChallengesText();
+                
+                // Hook up the close button inside the challenges panel
+                var closeBtn = _challengesRoot.GetComponentInChildren<Button>();
+                if (closeBtn != null && closeBtn != _challengesButton)
+                {
+                    // Remove existing listeners to avoid duplicates
+                    closeBtn.onClick.RemoveAllListeners();
+                    closeBtn.onClick.AddListener(ToggleChallenges);
+                }
             }
         }
 
@@ -317,7 +336,7 @@ namespace StackSurge.UI
             }
 
 
-            if (_helpText != null) _helpText.gameObject.SetActive(false);
+            if (_helpPanel != null) _helpPanel.SetActive(false);
 
             var gridMaskGo = new GameObject("GridMask");
             gridMaskGo.transform.SetParent(_hudRoot.transform, false);
