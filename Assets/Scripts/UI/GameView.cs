@@ -21,7 +21,7 @@ namespace StackSurge.UI
         RectTransform _gridRoot;
         [SerializeField] TextMeshProUGUI _scoreText;
         [SerializeField] TextMeshProUGUI _hudText;
-        
+
         // Visual Previews
         [SerializeField] Image _nextPreviewImg;
         [SerializeField] Image _queuedPreviewImg;
@@ -47,6 +47,10 @@ namespace StackSurge.UI
         [SerializeField] Button _challengesButton;
         [SerializeField] Button _helpButton;
         [SerializeField] Button _leaderboardButton;
+
+        [Header("Icons")]
+        [SerializeField] Sprite completedIcon;
+        [SerializeField] Sprite pendingIcon;
         ScreenShake _shake;
 
         Action<int> _onColumnClicked;
@@ -64,16 +68,18 @@ namespace StackSurge.UI
 
         // ── Leaderboard ───────────────────────────────────────────────────────
         Func<Task<LeaderboardEntryData[]>> _getLeaderboardScores;
-        Func<string, Task>               _setPlayerName;
-        Func<string>                     _getPlayerName;
-        GameObject                       _leaderboardRoot;
-        Transform                        _leaderboardRowContainer;
-        TextMeshProUGUI                  _leaderboardStatusText;
-        TMP_InputField                   _playerNameInput;
+        Func<string, Task> _setPlayerName;
+        Func<string> _getPlayerName;
+        GameObject _leaderboardRoot;
+        Transform _leaderboardRowContainer;
+        TextMeshProUGUI _leaderboardStatusText;
+        TMP_InputField _playerNameInput;
+        private Color completedColor = new(0.29f, 0.87f, 0.50f); // #4ADE80
+        private Color pendingColor = new(0.29f, 0.33f, 0.39f);   // #4B5563
 
         void Awake()
         {
-            if(_closeHelpButton != null) _closeHelpButton.onClick.AddListener(ToggleHelp);
+            if (_closeHelpButton != null) _closeHelpButton.onClick.AddListener(ToggleHelp);
         }
 
         public void Build(StackSurgeSettings settings, Action<int> onColumnClicked, Action onRetry, Action onShare, Func<ChallengeDisplayData[]> getChallengesData, Func<TimeSpan> getTimeUntilReset, Action<int> onClaimReward)
@@ -88,7 +94,7 @@ namespace StackSurge.UI
 
             EnsureInputSystemUi();
             BuildUi();
-            
+
             DOTween.SetTweensCapacity(500, 50);
             _retryButton.onClick.AddListener(Retry);
             _shareButton.onClick.AddListener(Share);
@@ -112,7 +118,7 @@ namespace StackSurge.UI
         public void UpdateHud(int score, string timeStr, string riseLine, float wildChance, TileKind current, TileKind next)
         {
             if (_scoreText == null) return;
-            
+
             if (score != _lastScore)
             {
                 _scoreText.text = score.ToString();
@@ -123,7 +129,7 @@ namespace StackSurge.UI
             _hudText.text =
                 $"Time: <color=#A0A0A0>{timeStr}</color>\n" +
                 $"<color=#60A5FA>{riseLine}</color>";
-            
+
             UpdatePreviewSquare(_nextPreviewImg, _nextInnerLabel, current);
             UpdatePreviewSquare(_queuedPreviewImg, _queuedInnerLabel, next);
         }
@@ -159,12 +165,12 @@ namespace StackSurge.UI
         public void ShowGameOver(int score, int dailyBest, int allTimeHigh, int streak)
         {
             _hudRoot.SetActive(false);
-            
+
             _gameOverScore.text = $"Score: <size=120%>{score}</size>\n\n" +
                                  $"Daily Best: {dailyBest}\n" +
                                  $"All-time: {allTimeHigh}\n" +
                                  $"Streak: {streak} days";
-            
+
             _gameOverRoot.SetActive(true);
             var cg = _gameOverRoot.GetComponent<CanvasGroup>();
             cg.alpha = 0;
@@ -192,10 +198,10 @@ namespace StackSurge.UI
             if (_challengesRoot == null) return;
             bool active = !_challengesRoot.activeSelf;
             _challengesRoot.SetActive(active);
-            
+
             // Pause/resume the game
             Time.timeScale = active ? 0f : 1f;
-            
+
             if (active)
             {
                 // Animate panel scale and fade-in
@@ -282,9 +288,10 @@ namespace StackSurge.UI
                     {
                         if (rowView.TitleText != null) rowView.TitleText.text = item.Title;
                         if (rowView.DescriptionText != null) rowView.DescriptionText.text = item.Description;
-                        if (rowView.StatusText != null)
+                        if (rowView.StatusIcon != null)
                         {
-                            rowView.StatusText.text = item.Completed ? "<color=#4ADE80>✓</color>" : "<color=#4B5563>○</color>";
+                            rowView.StatusIcon.sprite = item.Completed ? completedIcon : pendingIcon;
+                            rowView.StatusIcon.color = item.Completed ? completedColor : pendingColor;
                         }
                         if (rowView.ProgressText != null)
                         {
@@ -318,7 +325,8 @@ namespace StackSurge.UI
                                 {
                                     rowView.ClaimButton.gameObject.SetActive(true);
                                     rowView.ClaimButton.onClick.RemoveAllListeners();
-                                    rowView.ClaimButton.onClick.AddListener(() => {
+                                    rowView.ClaimButton.onClick.AddListener(() =>
+                                    {
                                         if (_onClaimReward != null)
                                         {
                                             _onClaimReward(index);
@@ -343,7 +351,7 @@ namespace StackSurge.UI
 
                         if (rowView.BackgroundImage != null)
                         {
-                            rowView.BackgroundImage.color = item.Completed 
+                            rowView.BackgroundImage.color = item.Completed
                                 ? new Color(1f, 0.85f, 0.4f, 0.15f) // Completed gold tint
                                 : new Color(0.1f, 0.1f, 0.12f, 0.6f); // Standard background
                         }
@@ -363,7 +371,7 @@ namespace StackSurge.UI
 
                     // Add row background Image
                     var bgImg = rowGo.AddComponent<Image>();
-                    bgImg.color = item.Completed 
+                    bgImg.color = item.Completed
                         ? new Color(1f, 0.85f, 0.4f, 0.15f) // Completed gold tint
                         : new Color(0.1f, 0.1f, 0.12f, 0.6f); // Standard background
 
@@ -459,7 +467,7 @@ namespace StackSurge.UI
                     barFillRt.anchoredPosition = Vector2.zero;
                     barFillRt.sizeDelta = new Vector2(0, 0); // width driven by code
                     var barFillImg = barFillGo.AddComponent<Image>();
-                    
+
                     // Color transition from blue to green
                     float ratio = item.TargetValue > 0 ? (float)item.Progress / item.TargetValue : 0f;
                     barFillImg.color = Color.Lerp(new Color(0.2f, 0.6f, 1.0f), new Color(0.3f, 0.8f, 0.4f), ratio);
@@ -503,7 +511,8 @@ namespace StackSurge.UI
                             var claimBtnImg = claimBtnGo.AddComponent<Image>();
                             claimBtnImg.color = new Color(0.95f, 0.75f, 0.2f); // gold-yellow
                             var btn = claimBtnGo.AddComponent<Button>();
-                            btn.onClick.AddListener(() => {
+                            btn.onClick.AddListener(() =>
+                            {
                                 if (_onClaimReward != null)
                                 {
                                     _onClaimReward(index);
@@ -562,12 +571,12 @@ namespace StackSurge.UI
             float cellH = 920f / _settings.Rows;
 
             for (int r = 0; r < _settings.Rows; r++)
-            for (int c = 0; c < _settings.Columns; c++)
-            {
-                SetCellColor(r, c, cells[r, c]);
-                _cellImages[r, c].rectTransform.localScale = Vector3.one;
-                _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
-            }
+                for (int c = 0; c < _settings.Columns; c++)
+                {
+                    SetCellColor(r, c, cells[r, c]);
+                    _cellImages[r, c].rectTransform.localScale = Vector3.one;
+                    _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
+                }
         }
 
         public void SetCellColor(int r, int c, TileKind k)
@@ -599,17 +608,17 @@ namespace StackSurge.UI
         {
             int W = boardCells.GetLength(1);
             int H = boardCells.GetLength(0);
-            
+
             for (int dc = -1; dc <= 1; dc++)
-            for (int dr = -1; dr <= 1; dr++)
-            {
-                int cc = startCol + dc;
-                int rr = startRow + dr;
-                if (cc < 0 || cc >= W || rr < 0 || rr >= H) continue;
-                if (boardCells[rr, cc] == TileKind.Empty) continue;
-                
-                _cellImages[rr, cc].DOColor(Color.white, 0.05f).SetLoops((int)(blinkTime / 0.05f), LoopType.Yoyo);
-            }
+                for (int dr = -1; dr <= 1; dr++)
+                {
+                    int cc = startCol + dc;
+                    int rr = startRow + dr;
+                    if (cc < 0 || cc >= W || rr < 0 || rr >= H) continue;
+                    if (boardCells[rr, cc] == TileKind.Empty) continue;
+
+                    _cellImages[rr, cc].DOColor(Color.white, 0.05f).SetLoops((int)(blinkTime / 0.05f), LoopType.Yoyo);
+                }
             yield return new WaitForSeconds(blinkTime);
         }
 
@@ -619,34 +628,34 @@ namespace StackSurge.UI
             float maxFallTime = 0.4f;
             float cw = 720f / _settings.Columns;
             float cellH = 920f / _settings.Rows;
-            
+
             for (int r = 0; r < _settings.Rows; r++)
-            for (int c = 0; c < _settings.Columns; c++)
-            {
-                if (fallDistances[r, c] > 0)
+                for (int c = 0; c < _settings.Columns; c++)
                 {
-                    anyFalls = true;
-                    float startY = r * cellH + 4f;
-                    float endY = (r - fallDistances[r, c]) * cellH + 4f;
-                    
-                    _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, startY);
-                    _cellImages[r, c].rectTransform.DOAnchorPosY(endY, maxFallTime).SetEase(Ease.OutBounce);
+                    if (fallDistances[r, c] > 0)
+                    {
+                        anyFalls = true;
+                        float startY = r * cellH + 4f;
+                        float endY = (r - fallDistances[r, c]) * cellH + 4f;
+
+                        _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, startY);
+                        _cellImages[r, c].rectTransform.DOAnchorPosY(endY, maxFallTime).SetEase(Ease.OutBounce);
+                    }
                 }
-            }
-            
+
             if (anyFalls) yield return new WaitForSeconds(maxFallTime);
 
             // Important: Reset positions at the end of animation to maintain grid slot mapping
             for (int r = 0; r < _settings.Rows; r++)
-            for (int c = 0; c < _settings.Columns; c++)
-            {
-                _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
-            }
+                for (int c = 0; c < _settings.Columns; c++)
+                {
+                    _cellImages[r, c].rectTransform.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
+                }
         }
 
         public IEnumerator SlideGridUpCoroutine(float slideTime)
         {
-            float cellH = 920f / _settings.Rows; 
+            float cellH = 920f / _settings.Rows;
             _gridRoot.anchoredPosition = new Vector2(0, -cellH);
             _gridRoot.DOAnchorPosY(0f, slideTime).SetEase(Ease.OutBack);
             yield return new WaitForSeconds(slideTime);
@@ -739,22 +748,22 @@ namespace StackSurge.UI
             float cw = 720f / _settings.Columns;
             float cellH = 920f / _settings.Rows;
             for (int r = 0; r < _settings.Rows; r++)
-            for (int c = 0; c < _settings.Columns; c++)
-            {
-                var cell = new GameObject($"c_{r}_{c}");
-                cell.transform.SetParent(_gridRoot, false);
-                var rt = cell.AddComponent<RectTransform>();
-                rt.sizeDelta = new Vector2(cw - 8f, cellH - 8f);
-                rt.anchorMin = new Vector2(0, 0);
-                rt.anchorMax = new Vector2(0, 0);
-                rt.pivot = new Vector2(0, 0);
-                rt.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
-                var img = cell.AddComponent<Image>();
-                img.color = ColorFor(TileKind.Empty);
-                _cellImages[r, c] = img;
-            }
+                for (int c = 0; c < _settings.Columns; c++)
+                {
+                    var cell = new GameObject($"c_{r}_{c}");
+                    cell.transform.SetParent(_gridRoot, false);
+                    var rt = cell.AddComponent<RectTransform>();
+                    rt.sizeDelta = new Vector2(cw - 8f, cellH - 8f);
+                    rt.anchorMin = new Vector2(0, 0);
+                    rt.anchorMax = new Vector2(0, 0);
+                    rt.pivot = new Vector2(0, 0);
+                    rt.anchoredPosition = new Vector2(c * cw + 4f, r * cellH + 4f);
+                    var img = cell.AddComponent<Image>();
+                    img.color = ColorFor(TileKind.Empty);
+                    _cellImages[r, c] = img;
+                }
 
-            float colY = 270f; 
+            float colY = 270f;
             for (int c = 0; c < _settings.Columns; c++)
             {
                 int col = c;
@@ -773,7 +782,8 @@ namespace StackSurge.UI
                 colors.highlightedColor = new Color(1f, 1f, 1f, 0.15f);
                 colors.pressedColor = new Color(1f, 1f, 1f, 0.3f);
                 btn.colors = colors;
-                btn.onClick.AddListener(() => {
+                btn.onClick.AddListener(() =>
+                {
                     _onColumnClicked?.Invoke(col);
                 });
 
@@ -821,7 +831,7 @@ namespace StackSurge.UI
             rt.sizeDelta = new Vector2(160, 160);
             rt.pivot = new Vector2(0, 1);
             rt.anchorMin = rt.anchorMax = new Vector2(0, 1);
-            
+
             var lblGo = new GameObject("Label");
             lblGo.transform.SetParent(go.transform, false);
             var lrt = lblGo.AddComponent<RectTransform>();
@@ -844,7 +854,7 @@ namespace StackSurge.UI
             brt.sizeDelta = Vector2.zero;
             var img = box.AddComponent<Image>();
             img.color = new Color(1, 1, 1, 0.1f);
-            
+
             var txt = new GameObject("Text");
             txt.transform.SetParent(box.transform, false);
             var trt = txt.AddComponent<RectTransform>();
@@ -940,12 +950,12 @@ namespace StackSurge.UI
         /// <summary>Called from StackSurgeGame after auth completes so the delegates are ready.</summary>
         public void SetLeaderboardCallbacks(
             Func<Task<LeaderboardEntryData[]>> getLeaderboardScores,
-            Func<string, Task>                 setPlayerName,
-            Func<string>                       getPlayerName)
+            Func<string, Task> setPlayerName,
+            Func<string> getPlayerName)
         {
             _getLeaderboardScores = getLeaderboardScores;
-            _setPlayerName        = setPlayerName;
-            _getPlayerName        = getPlayerName;
+            _setPlayerName = setPlayerName;
+            _getPlayerName = getPlayerName;
 
             if (_playerNameInput != null)
                 _playerNameInput.text = getPlayerName?.Invoke() ?? "";
@@ -989,7 +999,7 @@ namespace StackSurge.UI
             LeaderboardEntryData[] entries = Array.Empty<LeaderboardEntryData>();
             if (_getLeaderboardScores != null)
             {
-                try   { entries = await _getLeaderboardScores(); }
+                try { entries = await _getLeaderboardScores(); }
                 catch { entries = Array.Empty<LeaderboardEntryData>(); }
             }
 
@@ -1029,7 +1039,7 @@ namespace StackSurge.UI
             var rankRt = rankGo.AddComponent<RectTransform>();
             rankRt.anchorMin = new Vector2(0f, 0.5f);
             rankRt.anchorMax = new Vector2(0f, 0.5f);
-            rankRt.pivot     = new Vector2(0f, 0.5f);
+            rankRt.pivot = new Vector2(0f, 0.5f);
             rankRt.anchoredPosition = new Vector2(10f, 0f);
             rankRt.sizeDelta = new Vector2(64f, 60f);
             var rankTmp = rankGo.AddComponent<TextMeshProUGUI>();
@@ -1037,9 +1047,9 @@ namespace StackSurge.UI
             rankTmp.raycastTarget = false;
             switch (entry.Rank)
             {
-                case 1:  rankTmp.text = "\U0001F947"; rankTmp.fontSize = 34; break; // 🥇
-                case 2:  rankTmp.text = "\U0001F948"; rankTmp.fontSize = 34; break; // 🥈
-                case 3:  rankTmp.text = "\U0001F949"; rankTmp.fontSize = 34; break; // 🥉
+                case 1: rankTmp.text = "\U0001F947"; rankTmp.fontSize = 34; break; // 🥇
+                case 2: rankTmp.text = "\U0001F948"; rankTmp.fontSize = 34; break; // 🥈
+                case 3: rankTmp.text = "\U0001F949"; rankTmp.fontSize = 34; break; // 🥉
                 default:
                     rankTmp.text = $"#{entry.Rank}";
                     rankTmp.fontSize = 22;
@@ -1053,16 +1063,16 @@ namespace StackSurge.UI
             var nameRt = nameGo.AddComponent<RectTransform>();
             nameRt.anchorMin = new Vector2(0f, 0.5f);
             nameRt.anchorMax = new Vector2(1f, 0.5f);
-            nameRt.pivot     = new Vector2(0f, 0.5f);
+            nameRt.pivot = new Vector2(0f, 0.5f);
             nameRt.anchoredPosition = new Vector2(80f, 0f);
             nameRt.sizeDelta = new Vector2(-280f, 52f);
             var nameTmp = nameGo.AddComponent<TextMeshProUGUI>();
             nameTmp.text = entry.PlayerName +
                            (isPlayer ? " <color=#FFD700><size=70%>(You)</size></color>" : "");
-            nameTmp.fontSize    = 24;
-            nameTmp.color       = isPlayer ? new Color(1f, 0.9f, 0.5f) : Color.white;
-            nameTmp.fontStyle   = isPlayer ? FontStyles.Bold : FontStyles.Normal;
-            nameTmp.alignment   = TextAlignmentOptions.Left;
+            nameTmp.fontSize = 24;
+            nameTmp.color = isPlayer ? new Color(1f, 0.9f, 0.5f) : Color.white;
+            nameTmp.fontStyle = isPlayer ? FontStyles.Bold : FontStyles.Normal;
+            nameTmp.alignment = TextAlignmentOptions.Left;
             nameTmp.overflowMode = TextOverflowModes.Ellipsis;
             nameTmp.raycastTarget = false;
 
@@ -1072,14 +1082,14 @@ namespace StackSurge.UI
             var scoreRt = scoreGo.AddComponent<RectTransform>();
             scoreRt.anchorMin = new Vector2(1f, 0.5f);
             scoreRt.anchorMax = new Vector2(1f, 0.5f);
-            scoreRt.pivot     = new Vector2(1f, 0.5f);
+            scoreRt.pivot = new Vector2(1f, 0.5f);
             scoreRt.anchoredPosition = new Vector2(-14f, 0f);
             scoreRt.sizeDelta = new Vector2(180f, 52f);
             var scoreTmp = scoreGo.AddComponent<TextMeshProUGUI>();
-            scoreTmp.text      = ((int)entry.Score).ToString("N0");
-            scoreTmp.fontSize  = 26;
+            scoreTmp.text = ((int)entry.Score).ToString("N0");
+            scoreTmp.fontSize = 26;
             scoreTmp.fontStyle = FontStyles.Bold;
-            scoreTmp.color     = isPlayer ? new Color(1f, 0.9f, 0.4f) : new Color(0.85f, 0.85f, 0.85f);
+            scoreTmp.color = isPlayer ? new Color(1f, 0.9f, 0.4f) : new Color(0.85f, 0.85f, 0.85f);
             scoreTmp.alignment = TextAlignmentOptions.Right;
             scoreTmp.raycastTarget = false;
 
@@ -1116,7 +1126,7 @@ namespace StackSurge.UI
             panelGo.transform.SetParent(panelParent, false);
             var panelRt = panelGo.AddComponent<RectTransform>();
             panelRt.anchorMin = panelRt.anchorMax = new Vector2(0.5f, 0.5f);
-            panelRt.pivot     = new Vector2(0.5f, 0.5f);
+            panelRt.pivot = new Vector2(0.5f, 0.5f);
             panelRt.sizeDelta = new Vector2(720f, 960f);
             panelRt.anchoredPosition = Vector2.zero;
             panelGo.AddComponent<Image>().color = new Color(0.07f, 0.07f, 0.10f, 0.97f);
@@ -1129,36 +1139,36 @@ namespace StackSurge.UI
             var headerRt = headerGo.AddComponent<RectTransform>();
             headerRt.anchorMin = new Vector2(0f, 1f);
             headerRt.anchorMax = new Vector2(1f, 1f);
-            headerRt.pivot     = new Vector2(0.5f, 1f);
+            headerRt.pivot = new Vector2(0.5f, 1f);
             headerRt.anchoredPosition = Vector2.zero;
             headerRt.sizeDelta = new Vector2(0f, 115f);
 
             // Title
             var titleGo = new GameObject("Title");
             titleGo.transform.SetParent(headerGo.transform, false);
-            var titleRt  = titleGo.AddComponent<RectTransform>();
+            var titleRt = titleGo.AddComponent<RectTransform>();
             titleRt.anchorMin = new Vector2(0.04f, 0.52f);
             titleRt.anchorMax = new Vector2(0.85f, 1f);
             titleRt.offsetMin = titleRt.offsetMax = Vector2.zero;
             var titleTmp = titleGo.AddComponent<TextMeshProUGUI>();
-            titleTmp.text      = "\U0001F3C6 LEADERBOARD"; // 🏆
-            titleTmp.fontSize  = 36;
+            titleTmp.text = "\U0001F3C6 LEADERBOARD"; // 🏆
+            titleTmp.fontSize = 36;
             titleTmp.fontStyle = FontStyles.Bold;
-            titleTmp.color     = new Color(1f, 0.85f, 0.3f);
+            titleTmp.color = new Color(1f, 0.85f, 0.3f);
             titleTmp.alignment = TextAlignmentOptions.Left;
             titleTmp.raycastTarget = false;
 
             // Subtitle
             var subGo = new GameObject("Subtitle");
             subGo.transform.SetParent(headerGo.transform, false);
-            var subRt  = subGo.AddComponent<RectTransform>();
+            var subRt = subGo.AddComponent<RectTransform>();
             subRt.anchorMin = new Vector2(0.04f, 0f);
             subRt.anchorMax = new Vector2(0.85f, 0.48f);
             subRt.offsetMin = subRt.offsetMax = Vector2.zero;
             var subTmp = subGo.AddComponent<TextMeshProUGUI>();
-            subTmp.text      = "Overall Score  ·  Resets every Sunday";
-            subTmp.fontSize  = 20;
-            subTmp.color     = new Color(0.55f, 0.55f, 0.55f, 0.9f);
+            subTmp.text = "Overall Score  ·  Resets every Sunday";
+            subTmp.fontSize = 20;
+            subTmp.color = new Color(0.55f, 0.55f, 0.55f, 0.9f);
             subTmp.alignment = TextAlignmentOptions.Left;
             subTmp.raycastTarget = false;
 
@@ -1174,7 +1184,7 @@ namespace StackSurge.UI
             var nameRowRt = nameRowGo.AddComponent<RectTransform>();
             nameRowRt.anchorMin = new Vector2(0f, 1f);
             nameRowRt.anchorMax = new Vector2(1f, 1f);
-            nameRowRt.pivot     = new Vector2(0.5f, 1f);
+            nameRowRt.pivot = new Vector2(0.5f, 1f);
             nameRowRt.anchoredPosition = new Vector2(0f, -120f);
             nameRowRt.sizeDelta = new Vector2(-30f, 78f);
             nameRowGo.AddComponent<Image>().color = new Color(0.12f, 0.12f, 0.17f, 0.85f);
@@ -1182,16 +1192,16 @@ namespace StackSurge.UI
             // Label
             var lblGo = new GameObject("Label");
             lblGo.transform.SetParent(nameRowGo.transform, false);
-            var lblRt  = lblGo.AddComponent<RectTransform>();
+            var lblRt = lblGo.AddComponent<RectTransform>();
             lblRt.anchorMin = new Vector2(0f, 0.5f);
             lblRt.anchorMax = new Vector2(0f, 0.5f);
-            lblRt.pivot     = new Vector2(0f, 0.5f);
+            lblRt.pivot = new Vector2(0f, 0.5f);
             lblRt.anchoredPosition = new Vector2(16f, 0f);
             lblRt.sizeDelta = new Vector2(155f, 55f);
             var lblTmp = lblGo.AddComponent<TextMeshProUGUI>();
-            lblTmp.text      = "Your Name:";
-            lblTmp.fontSize  = 21;
-            lblTmp.color     = new Color(0.65f, 0.65f, 0.65f);
+            lblTmp.text = "Your Name:";
+            lblTmp.fontSize = 21;
+            lblTmp.color = new Color(0.65f, 0.65f, 0.65f);
             lblTmp.alignment = TextAlignmentOptions.Left;
             lblTmp.raycastTarget = false;
 
@@ -1201,7 +1211,7 @@ namespace StackSurge.UI
             var inputRt = inputGo.AddComponent<RectTransform>();
             inputRt.anchorMin = new Vector2(0f, 0.5f);
             inputRt.anchorMax = new Vector2(1f, 0.5f);
-            inputRt.pivot     = new Vector2(0.5f, 0.5f);
+            inputRt.pivot = new Vector2(0.5f, 0.5f);
             inputRt.anchoredPosition = new Vector2(-55f, 0f);
             inputRt.sizeDelta = new Vector2(-300f, 52f);
             inputGo.AddComponent<Image>().color = new Color(0.18f, 0.18f, 0.24f, 1f);
@@ -1219,8 +1229,8 @@ namespace StackSurge.UI
             itRt.anchorMin = Vector2.zero; itRt.anchorMax = Vector2.one;
             itRt.offsetMin = itRt.offsetMax = Vector2.zero;
             var inputTmp = inputTextGo.AddComponent<TextMeshProUGUI>();
-            inputTmp.fontSize  = 23;
-            inputTmp.color     = Color.white;
+            inputTmp.fontSize = 23;
+            inputTmp.color = Color.white;
             inputTmp.alignment = TextAlignmentOptions.Left;
 
             var phGo = new GameObject("Placeholder");
@@ -1229,17 +1239,17 @@ namespace StackSurge.UI
             phRt.anchorMin = Vector2.zero; phRt.anchorMax = Vector2.one;
             phRt.offsetMin = phRt.offsetMax = Vector2.zero;
             var phTmp = phGo.AddComponent<TextMeshProUGUI>();
-            phTmp.text      = "Enter display name...";
-            phTmp.fontSize  = 23;
-            phTmp.color     = new Color(0.45f, 0.45f, 0.45f, 0.7f);
+            phTmp.text = "Enter display name...";
+            phTmp.fontSize = 23;
+            phTmp.color = new Color(0.45f, 0.45f, 0.45f, 0.7f);
             phTmp.fontStyle = FontStyles.Italic;
             phTmp.alignment = TextAlignmentOptions.Left;
 
             var inputField = inputGo.AddComponent<TMP_InputField>();
-            inputField.textComponent  = inputTmp;
-            inputField.placeholder    = phTmp;
+            inputField.textComponent = inputTmp;
+            inputField.placeholder = phTmp;
             inputField.characterLimit = 20;
-            inputField.text           = _getPlayerName?.Invoke() ?? "";
+            inputField.text = _getPlayerName?.Invoke() ?? "";
             _playerNameInput = inputField;
 
             // SET button
@@ -1248,7 +1258,7 @@ namespace StackSurge.UI
             var setBtnRt = setBtnGo.AddComponent<RectTransform>();
             setBtnRt.anchorMin = new Vector2(1f, 0.5f);
             setBtnRt.anchorMax = new Vector2(1f, 0.5f);
-            setBtnRt.pivot     = new Vector2(1f, 0.5f);
+            setBtnRt.pivot = new Vector2(1f, 0.5f);
             setBtnRt.anchoredPosition = new Vector2(-10f, 0f);
             setBtnRt.sizeDelta = new Vector2(105f, 52f);
             setBtnGo.AddComponent<Image>().color = new Color(0.22f, 0.55f, 1f, 1f);
@@ -1260,11 +1270,11 @@ namespace StackSurge.UI
             sbtRt.anchorMin = Vector2.zero; sbtRt.anchorMax = Vector2.one;
             sbtRt.offsetMin = sbtRt.offsetMax = Vector2.zero;
             var setBtnTmp = setBtnTxtGo.AddComponent<TextMeshProUGUI>();
-            setBtnTmp.text      = "SET";
-            setBtnTmp.fontSize  = 22;
+            setBtnTmp.text = "SET";
+            setBtnTmp.fontSize = 22;
             setBtnTmp.fontStyle = FontStyles.Bold;
             setBtnTmp.alignment = TextAlignmentOptions.Center;
-            setBtnTmp.color     = Color.white;
+            setBtnTmp.color = Color.white;
             setBtnTmp.raycastTarget = false;
 
             // Separator below name row
@@ -1279,10 +1289,10 @@ namespace StackSurge.UI
             rcRt.offsetMin = new Vector2(15f, 15f);
             rcRt.offsetMax = new Vector2(-15f, -210f);
             var vlg = rowContainerGo.AddComponent<VerticalLayoutGroup>();
-            vlg.spacing           = 7f;
-            vlg.childControlWidth  = true;
+            vlg.spacing = 7f;
+            vlg.childControlWidth = true;
             vlg.childControlHeight = false;
-            vlg.childForceExpandWidth  = true;
+            vlg.childForceExpandWidth = true;
             vlg.childForceExpandHeight = false;
             vlg.padding = new RectOffset(0, 0, 4, 4);
             _leaderboardRowContainer = rowContainerGo.transform;
@@ -1296,9 +1306,9 @@ namespace StackSurge.UI
             statusRt.sizeDelta = new Vector2(560f, 100f);
             statusRt.anchoredPosition = new Vector2(0f, -100f);
             _leaderboardStatusText = statusGo.AddComponent<TextMeshProUGUI>();
-            _leaderboardStatusText.text      = "Loading scores...";
-            _leaderboardStatusText.fontSize  = 26;
-            _leaderboardStatusText.color     = new Color(0.55f, 0.55f, 0.55f);
+            _leaderboardStatusText.text = "Loading scores...";
+            _leaderboardStatusText.fontSize = 26;
+            _leaderboardStatusText.color = new Color(0.55f, 0.55f, 0.55f);
             _leaderboardStatusText.alignment = TextAlignmentOptions.Center;
             _leaderboardStatusText.raycastTarget = false;
             statusGo.SetActive(false);
@@ -1312,14 +1322,14 @@ namespace StackSurge.UI
                 var btnRt = btnGo.AddComponent<RectTransform>();
                 btnRt.anchorMin = new Vector2(1f, 1f);
                 btnRt.anchorMax = new Vector2(1f, 1f);
-                btnRt.pivot     = new Vector2(1f, 1f);
+                btnRt.pivot = new Vector2(1f, 1f);
                 btnRt.anchoredPosition = new Vector2(-18f, -18f);
                 btnRt.sizeDelta = new Vector2(82f, 82f);
                 btnGo.AddComponent<Image>().color = new Color(0.14f, 0.14f, 0.19f, 0.92f);
                 _leaderboardButton = btnGo.AddComponent<Button>();
                 var btnColors = _leaderboardButton.colors;
                 btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.15f);
-                btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.3f);
+                btnColors.pressedColor = new Color(1f, 1f, 1f, 0.3f);
                 _leaderboardButton.colors = btnColors;
                 _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
 
@@ -1329,8 +1339,8 @@ namespace StackSurge.UI
                 btRt.anchorMin = Vector2.zero; btRt.anchorMax = Vector2.one;
                 btRt.offsetMin = btRt.offsetMax = Vector2.zero;
                 var btnTmp = btnTxtGo.AddComponent<TextMeshProUGUI>();
-                btnTmp.text      = "\U0001F3C6"; // 🏆
-                btnTmp.fontSize  = 36;
+                btnTmp.text = "\U0001F3C6"; // 🏆
+                btnTmp.fontSize = 36;
                 btnTmp.alignment = TextAlignmentOptions.Center;
                 btnTmp.raycastTarget = false;
             }
@@ -1345,7 +1355,7 @@ namespace StackSurge.UI
             var rt = sep.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.03f, 1f);
             rt.anchorMax = new Vector2(0.97f, 1f);
-            rt.pivot     = new Vector2(0.5f, 1f);
+            rt.pivot = new Vector2(0.5f, 1f);
             rt.anchoredPosition = new Vector2(0f, yFromTop);
             rt.sizeDelta = new Vector2(0f, 1f);
             sep.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.07f);
@@ -1358,7 +1368,7 @@ namespace StackSurge.UI
             var rt = go.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(1f, 0.5f);
             rt.anchorMax = new Vector2(1f, 0.5f);
-            rt.pivot     = new Vector2(1f, 0.5f);
+            rt.pivot = new Vector2(1f, 0.5f);
             rt.anchoredPosition = new Vector2(-14f, 0f);
             rt.sizeDelta = new Vector2(68f, 68f);
             go.AddComponent<Image>().color = new Color(0.28f, 0.10f, 0.10f, 0.75f);
@@ -1371,11 +1381,11 @@ namespace StackSurge.UI
             tRt.anchorMin = Vector2.zero; tRt.anchorMax = Vector2.one;
             tRt.offsetMin = tRt.offsetMax = Vector2.zero;
             var t = txtGo.AddComponent<TextMeshProUGUI>();
-            t.text      = "✕";
-            t.fontSize  = 30;
+            t.text = "✕";
+            t.fontSize = 30;
             t.fontStyle = FontStyles.Bold;
             t.alignment = TextAlignmentOptions.Center;
-            t.color     = new Color(1f, 0.55f, 0.55f);
+            t.color = new Color(1f, 0.55f, 0.55f);
             t.raycastTarget = false;
         }
 
@@ -1417,7 +1427,8 @@ namespace StackSurge.UI
             {
                 startBtn.interactable = false;
                 startBtn.onClick.RemoveAllListeners();
-                startBtn.onClick.AddListener(() => {
+                startBtn.onClick.AddListener(() =>
+                {
                     startBtn.interactable = false;
                     Time.timeScale = 1f; // UNFREEZE THE GAME
                     HideLoadingScreen(1.2f);
@@ -1464,7 +1475,8 @@ namespace StackSurge.UI
         {
             if (_loadingRoot == null) return;
             var cg = _loadingRoot.GetComponent<CanvasGroup>();
-            cg.DOFade(0, duration).SetEase(Ease.InOutQuad).SetUpdate(true).OnComplete(() => {
+            cg.DOFade(0, duration).SetEase(Ease.InOutQuad).SetUpdate(true).OnComplete(() =>
+            {
                 _loadingRoot.SetActive(false);
                 OnLoadingDone?.Invoke();
             });

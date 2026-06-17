@@ -9,8 +9,10 @@ namespace StackSurge.UI
     /// </summary>
     public class ChallengeRowView : MonoBehaviour
     {
+        [Header("Icons")]
+        [SerializeField] Image _statusIcon;
+
         [Header("Text Fields")]
-        [SerializeField] TextMeshProUGUI _statusText;
         [SerializeField] TextMeshProUGUI _titleText;
         [SerializeField] TextMeshProUGUI _descriptionText;
         [SerializeField] TextMeshProUGUI _progressText;
@@ -24,7 +26,7 @@ namespace StackSurge.UI
         [SerializeField] Image _backgroundImage;
 
         // Public getters for controller binding
-        public TextMeshProUGUI StatusText => _statusText;
+        public Image StatusIcon => _statusIcon;
         public TextMeshProUGUI TitleText => _titleText;
         public TextMeshProUGUI DescriptionText => _descriptionText;
         public TextMeshProUGUI ProgressText => _progressText;
