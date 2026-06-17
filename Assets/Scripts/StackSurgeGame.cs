@@ -1,5 +1,6 @@
 using System;
 using System.Collections;
+using System.Threading.Tasks;
 using StackSurge.Core;
 using StackSurge.Meta;
 using StackSurge.Settings;
@@ -24,6 +25,7 @@ namespace StackSurge
         SaveData _save;
         ChallengeTracker _challenges;
         ChallengeProvider _provider;
+        LeaderboardService _leaderboardService;
 
         TileKind _current;
         TileKind _next;
@@ -82,6 +84,18 @@ namespace StackSurge
             _view.UpdateLoadingStatus("CONNECTING TO SERVICES...");
             var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
             await _provider.InitializeAsync(_save, defs);
+
+            _leaderboardService = new LeaderboardService(_provider.IsOnline);
+            _view.SetLeaderboardCallbacks(
+                () => _leaderboardService.GetTopScoresAsync(),
+                async name =>
+                {
+                    _save.PlayerDisplayName = name;
+                    LocalProgress.Save(_save);
+                    await _leaderboardService.SetPlayerNameAsync(name);
+                },
+                () => _save.PlayerDisplayName
+            );
 
             _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "OFFLINE FALLBACK");
             _challenges = new ChallengeTracker(_provider);
@@ -344,6 +358,9 @@ namespace StackSurge
             {
                 _ = _provider.SaveAsync();
             }
+
+            if (_leaderboardService != null)
+                _ = _leaderboardService.SubmitScoreAsync(_score.TotalScore);
             
             _view.ShowGameOver(_score.TotalScore, _save.DailyBest, _save.AllTimeHigh, _save.Streak);
         }

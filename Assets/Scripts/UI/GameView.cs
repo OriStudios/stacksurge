@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Threading.Tasks;
 using StackSurge.Core;
 using StackSurge.Settings;
 using StackSurge.Meta;
@@ -45,6 +46,7 @@ namespace StackSurge.UI
         [SerializeField] TextMeshProUGUI _challengesBody;
         [SerializeField] Button _challengesButton;
         [SerializeField] Button _helpButton;
+        [SerializeField] Button _leaderboardButton;
         ScreenShake _shake;
 
         Action<int> _onColumnClicked;
@@ -59,6 +61,15 @@ namespace StackSurge.UI
         Coroutine _resetTimerCoroutine;
 
         private int _lastScore = 0;
+
+        // ── Leaderboard ───────────────────────────────────────────────────────
+        Func<Task<LeaderboardEntryData[]>> _getLeaderboardScores;
+        Func<string, Task>               _setPlayerName;
+        Func<string>                     _getPlayerName;
+        GameObject                       _leaderboardRoot;
+        Transform                        _leaderboardRowContainer;
+        TextMeshProUGUI                  _leaderboardStatusText;
+        TMP_InputField                   _playerNameInput;
 
         void Awake()
         {
@@ -84,6 +95,7 @@ namespace StackSurge.UI
 
             if (_challengesButton != null) _challengesButton.onClick.AddListener(ToggleChallenges);
             if (_helpButton != null) _helpButton.onClick.AddListener(ToggleHelp);
+            if (_leaderboardButton != null) _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
 
             // Hide old challenges body text and prepare the row container
             if (_challengesBody != null)
@@ -796,6 +808,8 @@ namespace StackSurge.UI
             {
                 BuildLoadingScreen(transform);
             }
+
+            BuildLeaderboardPanel();
         }
 
         private Image CreatePreviewSlot(Transform parent, string label, Vector2 pos, out TextMeshProUGUI innerLabel)
@@ -917,6 +931,452 @@ namespace StackSurge.UI
             {
                 _loadingStatusText.text = status;
             }
+        }
+
+        // ─────────────────────────────────────────────────────────────────────
+        // Leaderboard
+        // ─────────────────────────────────────────────────────────────────────
+
+        /// <summary>Called from StackSurgeGame after auth completes so the delegates are ready.</summary>
+        public void SetLeaderboardCallbacks(
+            Func<Task<LeaderboardEntryData[]>> getLeaderboardScores,
+            Func<string, Task>                 setPlayerName,
+            Func<string>                       getPlayerName)
+        {
+            _getLeaderboardScores = getLeaderboardScores;
+            _setPlayerName        = setPlayerName;
+            _getPlayerName        = getPlayerName;
+
+            if (_playerNameInput != null)
+                _playerNameInput.text = getPlayerName?.Invoke() ?? "";
+        }
+
+        public void ToggleLeaderboard()
+        {
+            if (_leaderboardRoot == null) return;
+            bool active = !_leaderboardRoot.activeSelf;
+            _leaderboardRoot.SetActive(active);
+            Time.timeScale = active ? 0f : 1f;
+
+            if (active)
+            {
+                var cg = _leaderboardRoot.GetComponent<CanvasGroup>();
+                cg.alpha = 0f;
+                cg.DOFade(1f, 0.25f).SetUpdate(true);
+                _leaderboardRoot.transform.localScale = Vector3.one * 0.9f;
+                _leaderboardRoot.transform.DOScale(1f, 0.25f).SetEase(Ease.OutBack).SetUpdate(true);
+
+                if (_playerNameInput != null && _getPlayerName != null)
+                    _playerNameInput.text = _getPlayerName();
+
+                PopulateLeaderboard();
+            }
+        }
+
+        async void PopulateLeaderboard()
+        {
+            if (_leaderboardRowContainer == null) return;
+
+            foreach (Transform child in _leaderboardRowContainer)
+                Destroy(child.gameObject);
+
+            if (_leaderboardStatusText != null)
+            {
+                _leaderboardStatusText.gameObject.SetActive(true);
+                _leaderboardStatusText.text = "Loading scores...";
+            }
+
+            LeaderboardEntryData[] entries = Array.Empty<LeaderboardEntryData>();
+            if (_getLeaderboardScores != null)
+            {
+                try   { entries = await _getLeaderboardScores(); }
+                catch { entries = Array.Empty<LeaderboardEntryData>(); }
+            }
+
+            if (_leaderboardStatusText != null)
+                _leaderboardStatusText.gameObject.SetActive(false);
+
+            if (entries.Length == 0)
+            {
+                if (_leaderboardStatusText != null)
+                {
+                    _leaderboardStatusText.gameObject.SetActive(true);
+                    _leaderboardStatusText.text =
+                        "Could not load scores.\n<size=80%><color=#606060>Play online to appear here!</color></size>";
+                }
+                return;
+            }
+
+            for (int i = 0; i < entries.Length; i++)
+                BuildLeaderboardRow(entries[i], i);
+        }
+
+        void BuildLeaderboardRow(LeaderboardEntryData entry, int delayIndex)
+        {
+            var rowGo = new GameObject($"LBRow_{entry.Rank}");
+            rowGo.transform.SetParent(_leaderboardRowContainer, false);
+            var rowRt = rowGo.AddComponent<RectTransform>();
+            rowRt.sizeDelta = new Vector2(0f, 66f);
+
+            bool isPlayer = entry.IsCurrentPlayer;
+            rowGo.AddComponent<Image>().color = isPlayer
+                ? new Color(1f, 0.85f, 0.3f, 0.18f)
+                : new Color(0.1f, 0.1f, 0.13f, 0.7f);
+
+            // Rank badge
+            var rankGo = new GameObject("Rank");
+            rankGo.transform.SetParent(rowGo.transform, false);
+            var rankRt = rankGo.AddComponent<RectTransform>();
+            rankRt.anchorMin = new Vector2(0f, 0.5f);
+            rankRt.anchorMax = new Vector2(0f, 0.5f);
+            rankRt.pivot     = new Vector2(0f, 0.5f);
+            rankRt.anchoredPosition = new Vector2(10f, 0f);
+            rankRt.sizeDelta = new Vector2(64f, 60f);
+            var rankTmp = rankGo.AddComponent<TextMeshProUGUI>();
+            rankTmp.alignment = TextAlignmentOptions.Center;
+            rankTmp.raycastTarget = false;
+            switch (entry.Rank)
+            {
+                case 1:  rankTmp.text = "\U0001F947"; rankTmp.fontSize = 34; break; // 🥇
+                case 2:  rankTmp.text = "\U0001F948"; rankTmp.fontSize = 34; break; // 🥈
+                case 3:  rankTmp.text = "\U0001F949"; rankTmp.fontSize = 34; break; // 🥉
+                default:
+                    rankTmp.text = $"#{entry.Rank}";
+                    rankTmp.fontSize = 22;
+                    rankTmp.color = new Color(0.55f, 0.55f, 0.55f);
+                    break;
+            }
+
+            // Player name
+            var nameGo = new GameObject("Name");
+            nameGo.transform.SetParent(rowGo.transform, false);
+            var nameRt = nameGo.AddComponent<RectTransform>();
+            nameRt.anchorMin = new Vector2(0f, 0.5f);
+            nameRt.anchorMax = new Vector2(1f, 0.5f);
+            nameRt.pivot     = new Vector2(0f, 0.5f);
+            nameRt.anchoredPosition = new Vector2(80f, 0f);
+            nameRt.sizeDelta = new Vector2(-280f, 52f);
+            var nameTmp = nameGo.AddComponent<TextMeshProUGUI>();
+            nameTmp.text = entry.PlayerName +
+                           (isPlayer ? " <color=#FFD700><size=70%>(You)</size></color>" : "");
+            nameTmp.fontSize    = 24;
+            nameTmp.color       = isPlayer ? new Color(1f, 0.9f, 0.5f) : Color.white;
+            nameTmp.fontStyle   = isPlayer ? FontStyles.Bold : FontStyles.Normal;
+            nameTmp.alignment   = TextAlignmentOptions.Left;
+            nameTmp.overflowMode = TextOverflowModes.Ellipsis;
+            nameTmp.raycastTarget = false;
+
+            // Score
+            var scoreGo = new GameObject("Score");
+            scoreGo.transform.SetParent(rowGo.transform, false);
+            var scoreRt = scoreGo.AddComponent<RectTransform>();
+            scoreRt.anchorMin = new Vector2(1f, 0.5f);
+            scoreRt.anchorMax = new Vector2(1f, 0.5f);
+            scoreRt.pivot     = new Vector2(1f, 0.5f);
+            scoreRt.anchoredPosition = new Vector2(-14f, 0f);
+            scoreRt.sizeDelta = new Vector2(180f, 52f);
+            var scoreTmp = scoreGo.AddComponent<TextMeshProUGUI>();
+            scoreTmp.text      = ((int)entry.Score).ToString("N0");
+            scoreTmp.fontSize  = 26;
+            scoreTmp.fontStyle = FontStyles.Bold;
+            scoreTmp.color     = isPlayer ? new Color(1f, 0.9f, 0.4f) : new Color(0.85f, 0.85f, 0.85f);
+            scoreTmp.alignment = TextAlignmentOptions.Right;
+            scoreTmp.raycastTarget = false;
+
+            // Staggered pop-in
+            rowRt.localScale = new Vector3(0.88f, 0.88f, 1f);
+            rowRt.DOScale(1f, 0.28f).SetEase(Ease.OutBack).SetDelay(delayIndex * 0.055f).SetUpdate(true);
+        }
+
+        async void OnSetPlayerName()
+        {
+            if (_playerNameInput == null || _setPlayerName == null) return;
+            string name = _playerNameInput.text.Trim();
+            if (name.Length < 1 || name.Length > 20) return;
+
+            if (_leaderboardStatusText != null)
+            {
+                _leaderboardStatusText.gameObject.SetActive(true);
+                _leaderboardStatusText.text = "Updating name...";
+            }
+
+            await _setPlayerName(name);
+
+            // Brief wait for UGS to propagate the name before refreshing
+            await Task.Delay(600);
+            PopulateLeaderboard();
+        }
+
+        void BuildLeaderboardPanel()
+        {
+            Transform panelParent = _mainCanvas != null ? _mainCanvas.transform : transform;
+
+            // ── Outer panel ──────────────────────────────────────────────────
+            var panelGo = new GameObject("LeaderboardPanel");
+            panelGo.transform.SetParent(panelParent, false);
+            var panelRt = panelGo.AddComponent<RectTransform>();
+            panelRt.anchorMin = panelRt.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRt.pivot     = new Vector2(0.5f, 0.5f);
+            panelRt.sizeDelta = new Vector2(720f, 960f);
+            panelRt.anchoredPosition = Vector2.zero;
+            panelGo.AddComponent<Image>().color = new Color(0.07f, 0.07f, 0.10f, 0.97f);
+            panelGo.AddComponent<CanvasGroup>();
+            _leaderboardRoot = panelGo;
+
+            // ── Header ───────────────────────────────────────────────────────
+            var headerGo = new GameObject("Header");
+            headerGo.transform.SetParent(panelGo.transform, false);
+            var headerRt = headerGo.AddComponent<RectTransform>();
+            headerRt.anchorMin = new Vector2(0f, 1f);
+            headerRt.anchorMax = new Vector2(1f, 1f);
+            headerRt.pivot     = new Vector2(0.5f, 1f);
+            headerRt.anchoredPosition = Vector2.zero;
+            headerRt.sizeDelta = new Vector2(0f, 115f);
+
+            // Title
+            var titleGo = new GameObject("Title");
+            titleGo.transform.SetParent(headerGo.transform, false);
+            var titleRt  = titleGo.AddComponent<RectTransform>();
+            titleRt.anchorMin = new Vector2(0.04f, 0.52f);
+            titleRt.anchorMax = new Vector2(0.85f, 1f);
+            titleRt.offsetMin = titleRt.offsetMax = Vector2.zero;
+            var titleTmp = titleGo.AddComponent<TextMeshProUGUI>();
+            titleTmp.text      = "\U0001F3C6 LEADERBOARD"; // 🏆
+            titleTmp.fontSize  = 36;
+            titleTmp.fontStyle = FontStyles.Bold;
+            titleTmp.color     = new Color(1f, 0.85f, 0.3f);
+            titleTmp.alignment = TextAlignmentOptions.Left;
+            titleTmp.raycastTarget = false;
+
+            // Subtitle
+            var subGo = new GameObject("Subtitle");
+            subGo.transform.SetParent(headerGo.transform, false);
+            var subRt  = subGo.AddComponent<RectTransform>();
+            subRt.anchorMin = new Vector2(0.04f, 0f);
+            subRt.anchorMax = new Vector2(0.85f, 0.48f);
+            subRt.offsetMin = subRt.offsetMax = Vector2.zero;
+            var subTmp = subGo.AddComponent<TextMeshProUGUI>();
+            subTmp.text      = "Overall Score  ·  Resets every Sunday";
+            subTmp.fontSize  = 20;
+            subTmp.color     = new Color(0.55f, 0.55f, 0.55f, 0.9f);
+            subTmp.alignment = TextAlignmentOptions.Left;
+            subTmp.raycastTarget = false;
+
+            // Close button
+            LBMakeCloseBtn(headerGo.transform);
+
+            // Header bottom separator
+            LBMakeSeparator(panelGo.transform, -115f);
+
+            // ── Name input row ───────────────────────────────────────────────
+            var nameRowGo = new GameObject("NameRow");
+            nameRowGo.transform.SetParent(panelGo.transform, false);
+            var nameRowRt = nameRowGo.AddComponent<RectTransform>();
+            nameRowRt.anchorMin = new Vector2(0f, 1f);
+            nameRowRt.anchorMax = new Vector2(1f, 1f);
+            nameRowRt.pivot     = new Vector2(0.5f, 1f);
+            nameRowRt.anchoredPosition = new Vector2(0f, -120f);
+            nameRowRt.sizeDelta = new Vector2(-30f, 78f);
+            nameRowGo.AddComponent<Image>().color = new Color(0.12f, 0.12f, 0.17f, 0.85f);
+
+            // Label
+            var lblGo = new GameObject("Label");
+            lblGo.transform.SetParent(nameRowGo.transform, false);
+            var lblRt  = lblGo.AddComponent<RectTransform>();
+            lblRt.anchorMin = new Vector2(0f, 0.5f);
+            lblRt.anchorMax = new Vector2(0f, 0.5f);
+            lblRt.pivot     = new Vector2(0f, 0.5f);
+            lblRt.anchoredPosition = new Vector2(16f, 0f);
+            lblRt.sizeDelta = new Vector2(155f, 55f);
+            var lblTmp = lblGo.AddComponent<TextMeshProUGUI>();
+            lblTmp.text      = "Your Name:";
+            lblTmp.fontSize  = 21;
+            lblTmp.color     = new Color(0.65f, 0.65f, 0.65f);
+            lblTmp.alignment = TextAlignmentOptions.Left;
+            lblTmp.raycastTarget = false;
+
+            // Input field
+            var inputGo = new GameObject("NameInput");
+            inputGo.transform.SetParent(nameRowGo.transform, false);
+            var inputRt = inputGo.AddComponent<RectTransform>();
+            inputRt.anchorMin = new Vector2(0f, 0.5f);
+            inputRt.anchorMax = new Vector2(1f, 0.5f);
+            inputRt.pivot     = new Vector2(0.5f, 0.5f);
+            inputRt.anchoredPosition = new Vector2(-55f, 0f);
+            inputRt.sizeDelta = new Vector2(-300f, 52f);
+            inputGo.AddComponent<Image>().color = new Color(0.18f, 0.18f, 0.24f, 1f);
+
+            var textAreaGo = new GameObject("Text Area");
+            textAreaGo.transform.SetParent(inputGo.transform, false);
+            var taRt = textAreaGo.AddComponent<RectTransform>();
+            taRt.anchorMin = Vector2.zero; taRt.anchorMax = Vector2.one;
+            taRt.offsetMin = new Vector2(8f, 2f); taRt.offsetMax = new Vector2(-8f, -2f);
+            textAreaGo.AddComponent<RectMask2D>();
+
+            var inputTextGo = new GameObject("Text");
+            inputTextGo.transform.SetParent(textAreaGo.transform, false);
+            var itRt = inputTextGo.AddComponent<RectTransform>();
+            itRt.anchorMin = Vector2.zero; itRt.anchorMax = Vector2.one;
+            itRt.offsetMin = itRt.offsetMax = Vector2.zero;
+            var inputTmp = inputTextGo.AddComponent<TextMeshProUGUI>();
+            inputTmp.fontSize  = 23;
+            inputTmp.color     = Color.white;
+            inputTmp.alignment = TextAlignmentOptions.Left;
+
+            var phGo = new GameObject("Placeholder");
+            phGo.transform.SetParent(textAreaGo.transform, false);
+            var phRt = phGo.AddComponent<RectTransform>();
+            phRt.anchorMin = Vector2.zero; phRt.anchorMax = Vector2.one;
+            phRt.offsetMin = phRt.offsetMax = Vector2.zero;
+            var phTmp = phGo.AddComponent<TextMeshProUGUI>();
+            phTmp.text      = "Enter display name...";
+            phTmp.fontSize  = 23;
+            phTmp.color     = new Color(0.45f, 0.45f, 0.45f, 0.7f);
+            phTmp.fontStyle = FontStyles.Italic;
+            phTmp.alignment = TextAlignmentOptions.Left;
+
+            var inputField = inputGo.AddComponent<TMP_InputField>();
+            inputField.textComponent  = inputTmp;
+            inputField.placeholder    = phTmp;
+            inputField.characterLimit = 20;
+            inputField.text           = _getPlayerName?.Invoke() ?? "";
+            _playerNameInput = inputField;
+
+            // SET button
+            var setBtnGo = new GameObject("SetNameBtn");
+            setBtnGo.transform.SetParent(nameRowGo.transform, false);
+            var setBtnRt = setBtnGo.AddComponent<RectTransform>();
+            setBtnRt.anchorMin = new Vector2(1f, 0.5f);
+            setBtnRt.anchorMax = new Vector2(1f, 0.5f);
+            setBtnRt.pivot     = new Vector2(1f, 0.5f);
+            setBtnRt.anchoredPosition = new Vector2(-10f, 0f);
+            setBtnRt.sizeDelta = new Vector2(105f, 52f);
+            setBtnGo.AddComponent<Image>().color = new Color(0.22f, 0.55f, 1f, 1f);
+            var setBtn = setBtnGo.AddComponent<Button>();
+            setBtn.onClick.AddListener(OnSetPlayerName);
+            var setBtnTxtGo = new GameObject("Text");
+            setBtnTxtGo.transform.SetParent(setBtnGo.transform, false);
+            var sbtRt = setBtnTxtGo.AddComponent<RectTransform>();
+            sbtRt.anchorMin = Vector2.zero; sbtRt.anchorMax = Vector2.one;
+            sbtRt.offsetMin = sbtRt.offsetMax = Vector2.zero;
+            var setBtnTmp = setBtnTxtGo.AddComponent<TextMeshProUGUI>();
+            setBtnTmp.text      = "SET";
+            setBtnTmp.fontSize  = 22;
+            setBtnTmp.fontStyle = FontStyles.Bold;
+            setBtnTmp.alignment = TextAlignmentOptions.Center;
+            setBtnTmp.color     = Color.white;
+            setBtnTmp.raycastTarget = false;
+
+            // Separator below name row
+            LBMakeSeparator(panelGo.transform, -202f);
+
+            // ── Row container (VerticalLayoutGroup) ──────────────────────────
+            var rowContainerGo = new GameObject("RowContainer");
+            rowContainerGo.transform.SetParent(panelGo.transform, false);
+            var rcRt = rowContainerGo.AddComponent<RectTransform>();
+            rcRt.anchorMin = new Vector2(0f, 0f);
+            rcRt.anchorMax = new Vector2(1f, 1f);
+            rcRt.offsetMin = new Vector2(15f, 15f);
+            rcRt.offsetMax = new Vector2(-15f, -210f);
+            var vlg = rowContainerGo.AddComponent<VerticalLayoutGroup>();
+            vlg.spacing           = 7f;
+            vlg.childControlWidth  = true;
+            vlg.childControlHeight = false;
+            vlg.childForceExpandWidth  = true;
+            vlg.childForceExpandHeight = false;
+            vlg.padding = new RectOffset(0, 0, 4, 4);
+            _leaderboardRowContainer = rowContainerGo.transform;
+
+            // ── Status / loading text ────────────────────────────────────────
+            var statusGo = new GameObject("StatusText");
+            statusGo.transform.SetParent(panelGo.transform, false);
+            var statusRt = statusGo.AddComponent<RectTransform>();
+            statusRt.anchorMin = new Vector2(0.5f, 0.5f);
+            statusRt.anchorMax = new Vector2(0.5f, 0.5f);
+            statusRt.sizeDelta = new Vector2(560f, 100f);
+            statusRt.anchoredPosition = new Vector2(0f, -100f);
+            _leaderboardStatusText = statusGo.AddComponent<TextMeshProUGUI>();
+            _leaderboardStatusText.text      = "Loading scores...";
+            _leaderboardStatusText.fontSize  = 26;
+            _leaderboardStatusText.color     = new Color(0.55f, 0.55f, 0.55f);
+            _leaderboardStatusText.alignment = TextAlignmentOptions.Center;
+            _leaderboardStatusText.raycastTarget = false;
+            statusGo.SetActive(false);
+
+            // ── Trophy button (fallback if not inspector-assigned) ────────────
+            if (_leaderboardButton == null)
+            {
+                var btnParent = _hudRoot != null ? _hudRoot.transform : panelParent;
+                var btnGo = new GameObject("LeaderboardBtn");
+                btnGo.transform.SetParent(btnParent, false);
+                var btnRt = btnGo.AddComponent<RectTransform>();
+                btnRt.anchorMin = new Vector2(1f, 1f);
+                btnRt.anchorMax = new Vector2(1f, 1f);
+                btnRt.pivot     = new Vector2(1f, 1f);
+                btnRt.anchoredPosition = new Vector2(-18f, -18f);
+                btnRt.sizeDelta = new Vector2(82f, 82f);
+                btnGo.AddComponent<Image>().color = new Color(0.14f, 0.14f, 0.19f, 0.92f);
+                _leaderboardButton = btnGo.AddComponent<Button>();
+                var btnColors = _leaderboardButton.colors;
+                btnColors.highlightedColor = new Color(1f, 1f, 1f, 0.15f);
+                btnColors.pressedColor     = new Color(1f, 1f, 1f, 0.3f);
+                _leaderboardButton.colors = btnColors;
+                _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
+
+                var btnTxtGo = new GameObject("Text");
+                btnTxtGo.transform.SetParent(btnGo.transform, false);
+                var btRt = btnTxtGo.AddComponent<RectTransform>();
+                btRt.anchorMin = Vector2.zero; btRt.anchorMax = Vector2.one;
+                btRt.offsetMin = btRt.offsetMax = Vector2.zero;
+                var btnTmp = btnTxtGo.AddComponent<TextMeshProUGUI>();
+                btnTmp.text      = "\U0001F3C6"; // 🏆
+                btnTmp.fontSize  = 36;
+                btnTmp.alignment = TextAlignmentOptions.Center;
+                btnTmp.raycastTarget = false;
+            }
+
+            _leaderboardRoot.SetActive(false);
+        }
+
+        void LBMakeSeparator(Transform parent, float yFromTop)
+        {
+            var sep = new GameObject("Separator");
+            sep.transform.SetParent(parent, false);
+            var rt = sep.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.03f, 1f);
+            rt.anchorMax = new Vector2(0.97f, 1f);
+            rt.pivot     = new Vector2(0.5f, 1f);
+            rt.anchoredPosition = new Vector2(0f, yFromTop);
+            rt.sizeDelta = new Vector2(0f, 1f);
+            sep.AddComponent<Image>().color = new Color(1f, 1f, 1f, 0.07f);
+        }
+
+        void LBMakeCloseBtn(Transform parent)
+        {
+            var go = new GameObject("CloseBtn");
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(1f, 0.5f);
+            rt.anchorMax = new Vector2(1f, 0.5f);
+            rt.pivot     = new Vector2(1f, 0.5f);
+            rt.anchoredPosition = new Vector2(-14f, 0f);
+            rt.sizeDelta = new Vector2(68f, 68f);
+            go.AddComponent<Image>().color = new Color(0.28f, 0.10f, 0.10f, 0.75f);
+            var btn = go.AddComponent<Button>();
+            btn.onClick.AddListener(ToggleLeaderboard);
+
+            var txtGo = new GameObject("X");
+            txtGo.transform.SetParent(go.transform, false);
+            var tRt = txtGo.AddComponent<RectTransform>();
+            tRt.anchorMin = Vector2.zero; tRt.anchorMax = Vector2.one;
+            tRt.offsetMin = tRt.offsetMax = Vector2.zero;
+            var t = txtGo.AddComponent<TextMeshProUGUI>();
+            t.text      = "✕";
+            t.fontSize  = 30;
+            t.fontStyle = FontStyles.Bold;
+            t.alignment = TextAlignmentOptions.Center;
+            t.color     = new Color(1f, 0.55f, 0.55f);
+            t.raycastTarget = false;
         }
 
         public void EnableStartButton()

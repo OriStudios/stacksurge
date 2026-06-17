@@ -22,6 +22,9 @@ namespace StackSurge.Meta
 
         /// <summary>Unclaimed reward points to apply at the start of the next run.</summary>
         public int PendingRewardPoints;
+
+        /// <summary>Display name chosen by the player, synced to UGS Authentication.</summary>
+        public string PlayerDisplayName = "";
     }
 
     public static class LocalProgress

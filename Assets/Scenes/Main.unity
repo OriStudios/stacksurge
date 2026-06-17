@@ -988,7 +988,7 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 6f939147c4c9a46fe96aaa0e931cf77c, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::StackSurge.StackSurgeGame
-  _settings: {fileID: 0}
+  _settings: {fileID: 11400000, guid: 75f8052345e9141289f4e5077ba0c5f3, type: 2}
   _challengeAssets: []
   _view: {fileID: 1382042878}
   _blinkTime: 1
