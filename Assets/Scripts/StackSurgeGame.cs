@@ -23,6 +23,7 @@ namespace StackSurge
         ScoreService _score;
         SaveData _save;
         ChallengeTracker _challenges;
+        ChallengeProvider _provider;
 
         TileKind _current;
         TileKind _next;
@@ -55,13 +56,12 @@ namespace StackSurge
             };
         }
 
-        void Awake()
+        async void Awake()
         {
             if (_settings == null) _settings = ScriptableObject.CreateInstance<StackSurgeSettings>();
 
             _save = LocalProgress.Load();
-            var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
-            _challenges = new ChallengeTracker(defs);
+            _provider = new ChallengeProvider();
 
             // Match camera background to loading screen color to prevent first-frame flash
             var cam = Camera.main;
@@ -73,10 +73,20 @@ namespace StackSurge
 
             if (_view == null) _view = GetComponent<GameView>();
             if (_view == null) _view = gameObject.AddComponent<GameView>();
-            _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengesText);
+            _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengeDisplayData, GetTimeUntilReset, ClaimReward);
 
             // Game starts only after loading screen finishes fading
             _view.OnLoadingDone = BeginRun;
+
+            // UGS / Challenges async initialization
+            _view.UpdateLoadingStatus("CONNECTING TO SERVICES...");
+            var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
+            await _provider.InitializeAsync(_save, defs);
+
+            _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "OFFLINE FALLBACK");
+            _challenges = new ChallengeTracker(_provider);
+
+            _view.EnableStartButton();
         }
 
         void Start()
@@ -119,6 +129,17 @@ namespace StackSurge
             _board = new GameBoard(_settings.Columns, _settings.Rows);
             _score = new ScoreService();
             _score.Reset(_settings.ComboWindowSeconds);
+
+            // Consume pending reward points to start with bonus points
+            if (_provider != null)
+            {
+                int bonus = _provider.ConsumePendingRewards();
+                if (bonus > 0)
+                {
+                    _score.AddDirectPoints(bonus);
+                }
+            }
+
             _timeAlive = 0f;
             _riseAccumulator = 0f;
             _slowFillBuff = 0f;
@@ -217,7 +238,7 @@ namespace StackSurge
 
             if (emptyAfter) _slowFillBuff = _settings.SlowFillBuffSeconds;
 
-            _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier, _save);
+            _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier);
             UpdateHud();
         }
 
@@ -316,8 +337,13 @@ namespace StackSurge
         void EndRun()
         {
             _playing = false;
-            _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier, _save);
+            _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier);
             LocalProgress.RegisterRunEnd(_score.TotalScore, _save);
+
+            if (_provider != null)
+            {
+                _ = _provider.SaveAsync();
+            }
             
             _view.ShowGameOver(_score.TotalScore, _save.DailyBest, _save.AllTimeHigh, _save.Streak);
         }
@@ -357,23 +383,26 @@ namespace StackSurge
             return $"{m:00}:{s:00}";
         }
 
-        string GetChallengesText()
+        ChallengeDisplayData[] GetChallengeDisplayData()
         {
-            var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
-            var sb = new System.Text.StringBuilder();
-            sb.AppendLine("Local challenges (no server)");
-            sb.AppendLine();
-            for (int i = 0; i < defs.Length; i++)
-            {
-                var d = defs[i];
-                if (d == null) continue;
-                bool done = i < _save.ChallengeBits.Length && _save.ChallengeBits[i] != 0;
-                sb.AppendLine($"{(done ? "[x]" : "[ ]")} {d.Title}");
-                sb.AppendLine(d.Description);
-                sb.AppendLine();
-            }
+            if (_provider == null) return Array.Empty<ChallengeDisplayData>();
+            return _provider.GetDisplayData();
+        }
 
-            return sb.ToString();
+        TimeSpan GetTimeUntilReset()
+        {
+            if (_provider == null) return TimeSpan.FromHours(24);
+            return _provider.GetTimeUntilReset();
+        }
+
+        void ClaimReward(int index)
+        {
+            if (_provider != null)
+            {
+                _provider.ClaimReward(index);
+                // Also trigger save immediately to persist the claim
+                _ = _provider.SaveAsync();
+            }
         }
     }
 }

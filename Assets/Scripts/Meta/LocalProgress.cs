@@ -13,6 +13,15 @@ namespace StackSurge.Meta
         public string LastPlayDate = "";
         public int Streak;
         public int[] ChallengeBits = Array.Empty<int>();
+
+        /// <summary>Granular progress values parallel to ChallengeBits (e.g. current score towards target).</summary>
+        public int[] ChallengeProgress = Array.Empty<int>();
+
+        /// <summary>ISO date of when the current challenge set was fetched; used to detect daily rotation.</summary>
+        public string ChallengeSetDate = "";
+
+        /// <summary>Unclaimed reward points to apply at the start of the next run.</summary>
+        public int PendingRewardPoints;
     }
 
     public static class LocalProgress

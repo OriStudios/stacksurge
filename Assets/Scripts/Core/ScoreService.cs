@@ -28,6 +28,11 @@ namespace StackSurge.Core
             _comboWindow = comboWindowSeconds;
         }
 
+        public void AddDirectPoints(int points)
+        {
+            TotalScore += points;
+        }
+
         public void TickSurvivalBonus(float deltaTime, float occupancy01)
         {
             if (occupancy01 <= 0.6f) return;

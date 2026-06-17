@@ -2,41 +2,40 @@ using UnityEngine;
 
 namespace StackSurge.Meta
 {
+    /// <summary>
+    /// Evaluates per-run metrics against active challenge definitions
+    /// and records granular progress through the ChallengeProvider.
+    /// </summary>
     public class ChallengeTracker
     {
-        readonly ChallengeDefinition[] _defs;
+        readonly ChallengeProvider _provider;
 
-        public ChallengeTracker(ChallengeDefinition[] defs) => _defs = defs ?? System.Array.Empty<ChallengeDefinition>();
+        public ChallengeTracker(ChallengeProvider provider) => _provider = provider;
 
-        public void TickRun(float timeAlive, int score, int bestComboMult, SaveData save)
+        /// <summary>
+        /// Called each match-resolve wave and at run end to update challenge progress.
+        /// </summary>
+        public void TickRun(float timeAlive, int score, int bestComboMult)
         {
-            if (_defs.Length == 0) return;
-            EnsureBits(save, _defs.Length);
+            if (_provider == null) return;
+            var defs = _provider.ActiveChallenges;
+            if (defs == null || defs.Length == 0) return;
 
-            for (int i = 0; i < _defs.Length; i++)
+            for (int i = 0; i < defs.Length; i++)
             {
-                if (save.ChallengeBits[i] != 0) continue;
-                var d = _defs[i];
+                if (_provider.CompletionBits[i] != 0) continue;
+                var d = defs[i];
                 if (d == null) continue;
-                bool done = d.Type switch
-                {
-                    ChallengeType.ScoreInRun => score >= d.TargetValue,
-                    ChallengeType.SurviveSeconds => timeAlive >= d.TargetValue,
-                    ChallengeType.MaxComboMultiplier => bestComboMult >= d.TargetValue,
-                    _ => false
-                };
-                if (done) save.ChallengeBits[i] = 1;
-            }
-        }
 
-        static void EnsureBits(SaveData save, int len)
-        {
-            if (save.ChallengeBits == null || save.ChallengeBits.Length < len)
-            {
-                var n = new int[len];
-                if (save.ChallengeBits != null)
-                    System.Array.Copy(save.ChallengeBits, n, save.ChallengeBits.Length);
-                save.ChallengeBits = n;
+                int value = d.Type switch
+                {
+                    ChallengeType.ScoreInRun => score,
+                    ChallengeType.SurviveSeconds => (int)timeAlive,
+                    ChallengeType.MaxComboMultiplier => bestComboMult,
+                    _ => 0
+                };
+
+                _provider.RecordProgress(i, value);
             }
         }
     }

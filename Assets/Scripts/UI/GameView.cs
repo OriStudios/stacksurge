@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using StackSurge.Core;
 using StackSurge.Settings;
+using StackSurge.Meta;
 using TMPro;
 using UnityEngine;
 using UnityEngine.EventSystems;
@@ -40,6 +41,7 @@ namespace StackSurge.UI
         [SerializeField] Button _shareButton;
 
         [SerializeField] GameObject _challengesRoot;
+        [SerializeField] GameObject _challengeRowPrefab;
         [SerializeField] TextMeshProUGUI _challengesBody;
         [SerializeField] Button _challengesButton;
         [SerializeField] Button _helpButton;
@@ -48,7 +50,13 @@ namespace StackSurge.UI
         Action<int> _onColumnClicked;
         Action _onRetry;
         Action _onShare;
-        Func<string> _getChallengesText;
+        Func<ChallengeDisplayData[]> _getChallengesData;
+        Func<TimeSpan> _getTimeUntilReset;
+        Action<int> _onClaimReward;
+
+        [SerializeField] Transform _challengeRowContainer;
+        TextMeshProUGUI _titleText;
+        Coroutine _resetTimerCoroutine;
 
         private int _lastScore = 0;
 
@@ -57,13 +65,15 @@ namespace StackSurge.UI
             if(_closeHelpButton != null) _closeHelpButton.onClick.AddListener(ToggleHelp);
         }
 
-        public void Build(StackSurgeSettings settings, Action<int> onColumnClicked, Action onRetry, Action onShare, Func<string> getChallengesText)
+        public void Build(StackSurgeSettings settings, Action<int> onColumnClicked, Action onRetry, Action onShare, Func<ChallengeDisplayData[]> getChallengesData, Func<TimeSpan> getTimeUntilReset, Action<int> onClaimReward)
         {
             _settings = settings;
             _onColumnClicked = onColumnClicked;
             _onRetry = onRetry;
             _onShare = onShare;
-            _getChallengesText = getChallengesText;
+            _getChallengesData = getChallengesData;
+            _getTimeUntilReset = getTimeUntilReset;
+            _onClaimReward = onClaimReward;
 
             EnsureInputSystemUi();
             BuildUi();
@@ -74,6 +84,17 @@ namespace StackSurge.UI
 
             if (_challengesButton != null) _challengesButton.onClick.AddListener(ToggleChallenges);
             if (_helpButton != null) _helpButton.onClick.AddListener(ToggleHelp);
+
+            // Hide old challenges body text and prepare the row container
+            if (_challengesBody != null)
+            {
+                _challengesBody.gameObject.SetActive(false);
+            }
+
+            if (_challengesRoot != null)
+            {
+                _titleText = _challengesRoot.transform.Find("Title")?.GetComponent<TextMeshProUGUI>();
+            }
         }
 
         public void UpdateHud(int score, string timeStr, string riseLine, float wildChance, TileKind current, TileKind next)
@@ -163,17 +184,362 @@ namespace StackSurge.UI
             // Pause/resume the game
             Time.timeScale = active ? 0f : 1f;
             
-            if (active && _getChallengesText != null)
+            if (active)
             {
-                _challengesBody.text = _getChallengesText();
-                
+                // Animate panel scale and fade-in
+                var cg = _challengesRoot.GetComponent<CanvasGroup>();
+                if (cg == null) cg = _challengesRoot.AddComponent<CanvasGroup>();
+                cg.alpha = 0f;
+                cg.DOFade(1f, 0.25f).SetUpdate(true);
+                _challengesRoot.transform.localScale = Vector3.one * 0.9f;
+                _challengesRoot.transform.DOScale(1f, 0.25f).SetEase(Ease.OutBack).SetUpdate(true);
+
+                // Build/Populate rows
+                PopulateChallenges();
+
+                // Start reset timer coroutine
+                if (_resetTimerCoroutine != null) StopCoroutine(_resetTimerCoroutine);
+                _resetTimerCoroutine = StartCoroutine(UpdateResetTimerCoroutine());
+
                 // Hook up the close button inside the challenges panel
                 var closeBtn = _challengesRoot.GetComponentInChildren<Button>();
                 if (closeBtn != null && closeBtn != _challengesButton)
                 {
-                    // Remove existing listeners to avoid duplicates
                     closeBtn.onClick.RemoveAllListeners();
                     closeBtn.onClick.AddListener(ToggleChallenges);
+                }
+            }
+            else
+            {
+                if (_resetTimerCoroutine != null)
+                {
+                    StopCoroutine(_resetTimerCoroutine);
+                    _resetTimerCoroutine = null;
+                }
+            }
+        }
+
+        private IEnumerator UpdateResetTimerCoroutine()
+        {
+            while (true)
+            {
+                if (_titleText != null && _getTimeUntilReset != null)
+                {
+                    var timeRemaining = _getTimeUntilReset();
+                    _titleText.text = $"DAILY CHALLENGES\n<size=50%><color=#A0A0A0>Resets in {timeRemaining.Hours:D2}h {timeRemaining.Minutes:D2}m {timeRemaining.Seconds:D2}s</color></size>";
+                }
+                yield return new WaitForSecondsRealtime(1.0f);
+            }
+        }
+
+        void PopulateChallenges()
+        {
+            if (_challengeRowContainer == null || _getChallengesData == null) return;
+
+            // Clear previous rows
+            foreach (Transform child in _challengeRowContainer)
+            {
+                Destroy(child.gameObject);
+            }
+
+            var data = _getChallengesData();
+            if (data == null) return;
+
+            float rowHeight = 110f;
+            float startY = (data.Length - 1) * rowHeight * 0.5f;
+
+            for (int i = 0; i < data.Length; i++)
+            {
+                int index = i;
+                var item = data[i];
+
+                GameObject rowGo;
+                RectTransform rowRt;
+
+                if (_challengeRowPrefab != null)
+                {
+                    rowGo = Instantiate(_challengeRowPrefab, _challengeRowContainer, false);
+                    rowRt = rowGo.GetComponent<RectTransform>();
+                    if (rowRt != null && _challengeRowContainer.GetComponent<UnityEngine.UI.LayoutGroup>() == null)
+                    {
+                        rowRt.anchoredPosition = new Vector2(0, startY - i * rowHeight);
+                    }
+
+                    var rowView = rowGo.GetComponent<ChallengeRowView>();
+                    if (rowView != null)
+                    {
+                        if (rowView.TitleText != null) rowView.TitleText.text = item.Title;
+                        if (rowView.DescriptionText != null) rowView.DescriptionText.text = item.Description;
+                        if (rowView.StatusText != null)
+                        {
+                            rowView.StatusText.text = item.Completed ? "<color=#4ADE80>✓</color>" : "<color=#4B5563>○</color>";
+                        }
+                        if (rowView.ProgressText != null)
+                        {
+                            rowView.ProgressText.text = $"{item.Progress} / {item.TargetValue}";
+                        }
+
+                        float ratio = item.TargetValue > 0 ? (float)item.Progress / item.TargetValue : 0f;
+
+                        if (rowView.ProgressBarFill != null)
+                        {
+                            rowView.ProgressBarFill.fillAmount = 0f;
+                            rowView.ProgressBarFill.DOFillAmount(ratio, 0.75f).SetEase(Ease.OutQuad).SetUpdate(true);
+                            rowView.ProgressBarFill.color = Color.Lerp(new Color(0.2f, 0.6f, 1.0f), new Color(0.3f, 0.8f, 0.4f), ratio);
+                        }
+
+                        if (item.Completed)
+                        {
+                            if (item.Claimed)
+                            {
+                                if (rowView.ClaimButton != null) rowView.ClaimButton.gameObject.SetActive(false);
+                                if (rowView.RewardText != null)
+                                {
+                                    rowView.RewardText.gameObject.SetActive(true);
+                                    rowView.RewardText.text = "CLAIMED";
+                                    rowView.RewardText.color = new Color(0.5f, 0.5f, 0.5f, 0.8f);
+                                }
+                            }
+                            else
+                            {
+                                if (rowView.ClaimButton != null)
+                                {
+                                    rowView.ClaimButton.gameObject.SetActive(true);
+                                    rowView.ClaimButton.onClick.RemoveAllListeners();
+                                    rowView.ClaimButton.onClick.AddListener(() => {
+                                        if (_onClaimReward != null)
+                                        {
+                                            _onClaimReward(index);
+                                            PopulateChallenges(); // Refresh panel
+                                        }
+                                    });
+                                    rowView.ClaimButton.transform.DOScale(1.08f, 0.6f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                                }
+                                if (rowView.RewardText != null) rowView.RewardText.gameObject.SetActive(false);
+                            }
+                        }
+                        else
+                        {
+                            if (rowView.ClaimButton != null) rowView.ClaimButton.gameObject.SetActive(false);
+                            if (rowView.RewardText != null)
+                            {
+                                rowView.RewardText.gameObject.SetActive(true);
+                                rowView.RewardText.text = $"+{item.RewardPoints} pts";
+                                rowView.RewardText.color = new Color(0.95f, 0.75f, 0.2f, 0.8f);
+                            }
+                        }
+
+                        if (rowView.BackgroundImage != null)
+                        {
+                            rowView.BackgroundImage.color = item.Completed 
+                                ? new Color(1f, 0.85f, 0.4f, 0.15f) // Completed gold tint
+                                : new Color(0.1f, 0.1f, 0.12f, 0.6f); // Standard background
+                        }
+                    }
+                }
+                else
+                {
+                    // Fallback to programmatic creation
+                    rowGo = new GameObject($"ChallengeRow_{i}");
+                    rowGo.transform.SetParent(_challengeRowContainer, false);
+                    rowRt = rowGo.AddComponent<RectTransform>();
+                    rowRt.anchorMin = new Vector2(0, 0.5f);
+                    rowRt.anchorMax = new Vector2(1, 0.5f);
+                    rowRt.pivot = new Vector2(0.5f, 0.5f);
+                    rowRt.anchoredPosition = new Vector2(0, startY - i * rowHeight);
+                    rowRt.sizeDelta = new Vector2(0, 100f);
+
+                    // Add row background Image
+                    var bgImg = rowGo.AddComponent<Image>();
+                    bgImg.color = item.Completed 
+                        ? new Color(1f, 0.85f, 0.4f, 0.15f) // Completed gold tint
+                        : new Color(0.1f, 0.1f, 0.12f, 0.6f); // Standard background
+
+                    // Status text (icon)
+                    var statusGo = new GameObject("StatusIcon");
+                    statusGo.transform.SetParent(rowGo.transform, false);
+                    var statusRt = statusGo.AddComponent<RectTransform>();
+                    statusRt.anchorMin = new Vector2(0, 0.5f);
+                    statusRt.anchorMax = new Vector2(0, 0.5f);
+                    statusRt.pivot = new Vector2(0, 0.5f);
+                    statusRt.anchoredPosition = new Vector2(20, 0);
+                    statusRt.sizeDelta = new Vector2(50, 80);
+                    var statusText = statusGo.AddComponent<TextMeshProUGUI>();
+                    statusText.text = item.Completed ? "<color=#4ADE80>✓</color>" : "<color=#4B5563>○</color>";
+                    statusText.fontSize = 32;
+                    statusText.alignment = TextAlignmentOptions.Center;
+
+                    // Title and Description
+                    var textColGo = new GameObject("TextColumn");
+                    textColGo.transform.SetParent(rowGo.transform, false);
+                    var textColRt = textColGo.AddComponent<RectTransform>();
+                    textColRt.anchorMin = new Vector2(0, 0.5f);
+                    textColRt.anchorMax = new Vector2(1, 0.5f);
+                    textColRt.pivot = new Vector2(0, 0.5f);
+                    // Adjust right side based on whether there's a claim button
+                    float rightOffset = (item.Completed && !item.Claimed) ? -180f : -150f;
+                    textColRt.anchoredPosition = new Vector2(80, 10);
+                    textColRt.sizeDelta = new Vector2(rightOffset - 80f, 80);
+
+                    var titleGo = new GameObject("Title");
+                    titleGo.transform.SetParent(textColGo.transform, false);
+                    var titleRt = titleGo.AddComponent<RectTransform>();
+                    titleRt.anchorMin = new Vector2(0, 1);
+                    titleRt.anchorMax = new Vector2(1, 1);
+                    titleRt.pivot = new Vector2(0, 1);
+                    titleRt.anchoredPosition = new Vector2(0, 0);
+                    titleRt.sizeDelta = new Vector2(0, 35);
+                    var titleText = titleGo.AddComponent<TextMeshProUGUI>();
+                    titleText.text = item.Title;
+                    titleText.fontSize = 24;
+                    titleText.fontStyle = FontStyles.Bold;
+                    titleText.color = Color.white;
+
+                    var descGo = new GameObject("Description");
+                    descGo.transform.SetParent(textColGo.transform, false);
+                    var descRt = descGo.AddComponent<RectTransform>();
+                    descRt.anchorMin = new Vector2(0, 0);
+                    descRt.anchorMax = new Vector2(1, 0);
+                    descRt.pivot = new Vector2(0, 0);
+                    descRt.anchoredPosition = new Vector2(0, 0);
+                    descRt.sizeDelta = new Vector2(0, 30);
+                    var descText = descGo.AddComponent<TextMeshProUGUI>();
+                    descText.text = item.Description;
+                    descText.fontSize = 18;
+                    descText.color = new Color(0.7f, 0.7f, 0.7f, 0.8f);
+
+                    // Progress Text (e.g. 500 / 1000)
+                    var progTextGo = new GameObject("ProgressText");
+                    progTextGo.transform.SetParent(rowGo.transform, false);
+                    var progTextRt = progTextGo.AddComponent<RectTransform>();
+                    progTextRt.anchorMin = new Vector2(1, 0.5f);
+                    progTextRt.anchorMax = new Vector2(1, 0.5f);
+                    progTextRt.pivot = new Vector2(1, 0.5f);
+                    float progTextRightOffset = (item.Completed && !item.Claimed) ? -180f : -20f;
+                    progTextRt.anchoredPosition = new Vector2(progTextRightOffset, 15);
+                    progTextRt.sizeDelta = new Vector2(150, 40);
+                    var progText = progTextGo.AddComponent<TextMeshProUGUI>();
+                    progText.text = $"{item.Progress} / {item.TargetValue}";
+                    progText.fontSize = 20;
+                    progText.alignment = TextAlignmentOptions.Right;
+                    progText.color = new Color(0.9f, 0.9f, 0.9f);
+
+                    // Progress Bar Background
+                    var barBgGo = new GameObject("ProgressBarBg");
+                    barBgGo.transform.SetParent(rowGo.transform, false);
+                    var barBgRt = barBgGo.AddComponent<RectTransform>();
+                    barBgRt.anchorMin = new Vector2(0, 0);
+                    barBgRt.anchorMax = new Vector2(1, 0);
+                    barBgRt.pivot = new Vector2(0.5f, 0);
+                    float barBgRightOffset = (item.Completed && !item.Claimed) ? -180f : -20f;
+                    barBgRt.anchoredPosition = new Vector2(80, 8);
+                    barBgRt.sizeDelta = new Vector2(barBgRightOffset - 80f, 10);
+                    var barBgImg = barBgGo.AddComponent<Image>();
+                    barBgImg.color = new Color(0.2f, 0.2f, 0.25f, 1f);
+
+                    // Progress Bar Fill
+                    var barFillGo = new GameObject("ProgressBarFill");
+                    barFillGo.transform.SetParent(barBgGo.transform, false);
+                    var barFillRt = barFillGo.AddComponent<RectTransform>();
+                    barFillRt.anchorMin = new Vector2(0, 0);
+                    barFillRt.anchorMax = new Vector2(0, 1);
+                    barFillRt.pivot = new Vector2(0, 0.5f);
+                    barFillRt.anchoredPosition = Vector2.zero;
+                    barFillRt.sizeDelta = new Vector2(0, 0); // width driven by code
+                    var barFillImg = barFillGo.AddComponent<Image>();
+                    
+                    // Color transition from blue to green
+                    float ratio = item.TargetValue > 0 ? (float)item.Progress / item.TargetValue : 0f;
+                    barFillImg.color = Color.Lerp(new Color(0.2f, 0.6f, 1.0f), new Color(0.3f, 0.8f, 0.4f), ratio);
+
+                    // Animate progress bar fill with DOFillAmount / width scaling
+                    float targetWidth = ratio * barBgRt.sizeDelta.x;
+                    barFillRt.sizeDelta = new Vector2(0, 0);
+                    barFillRt.DOSizeDelta(new Vector2(targetWidth, 0), 0.75f).SetEase(Ease.OutQuad).SetUpdate(true);
+
+                    // Claim Button / Label
+                    if (item.Completed)
+                    {
+                        if (item.Claimed)
+                        {
+                            // Show Claimed Label
+                            var claimedGo = new GameObject("ClaimedLabel");
+                            claimedGo.transform.SetParent(rowGo.transform, false);
+                            var claimedRt = claimedGo.AddComponent<RectTransform>();
+                            claimedRt.anchorMin = new Vector2(1, 0.5f);
+                            claimedRt.anchorMax = new Vector2(1, 0.5f);
+                            claimedRt.pivot = new Vector2(1, 0.5f);
+                            claimedRt.anchoredPosition = new Vector2(-20, 0);
+                            claimedRt.sizeDelta = new Vector2(140, 60);
+                            var claimedText = claimedGo.AddComponent<TextMeshProUGUI>();
+                            claimedText.text = "CLAIMED";
+                            claimedText.fontSize = 20;
+                            claimedText.alignment = TextAlignmentOptions.Center;
+                            claimedText.color = new Color(0.5f, 0.5f, 0.5f, 0.8f);
+                        }
+                        else
+                        {
+                            // Show Pulsing Claim Button
+                            var claimBtnGo = new GameObject("ClaimButton");
+                            claimBtnGo.transform.SetParent(rowGo.transform, false);
+                            var claimBtnRt = claimBtnGo.AddComponent<RectTransform>();
+                            claimBtnRt.anchorMin = new Vector2(1, 0.5f);
+                            claimBtnRt.anchorMax = new Vector2(1, 0.5f);
+                            claimBtnRt.pivot = new Vector2(1, 0.5f);
+                            claimBtnRt.anchoredPosition = new Vector2(-20, 0);
+                            claimBtnRt.sizeDelta = new Vector2(140, 60);
+                            var claimBtnImg = claimBtnGo.AddComponent<Image>();
+                            claimBtnImg.color = new Color(0.95f, 0.75f, 0.2f); // gold-yellow
+                            var btn = claimBtnGo.AddComponent<Button>();
+                            btn.onClick.AddListener(() => {
+                                if (_onClaimReward != null)
+                                {
+                                    _onClaimReward(index);
+                                    PopulateChallenges(); // Refresh panel
+                                }
+                            });
+
+                            var btnTextGo = new GameObject("Text");
+                            btnTextGo.transform.SetParent(claimBtnGo.transform, false);
+                            var btnTextRt = btnTextGo.AddComponent<RectTransform>();
+                            btnTextRt.anchorMin = Vector2.zero;
+                            btnTextRt.anchorMax = Vector2.one;
+                            btnTextRt.sizeDelta = Vector2.zero;
+                            var btnText = btnTextGo.AddComponent<TextMeshProUGUI>();
+                            btnText.text = "CLAIM";
+                            btnText.fontSize = 22;
+                            btnText.fontStyle = FontStyles.Bold;
+                            btnText.alignment = TextAlignmentOptions.Center;
+                            btnText.color = Color.black;
+
+                            // Pulse animation using DOTween
+                            claimBtnRt.DOScale(1.08f, 0.6f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                        }
+                    }
+                    else
+                    {
+                        // If not completed, show reward points label
+                        var rewardGo = new GameObject("RewardLabel");
+                        rewardGo.transform.SetParent(rowGo.transform, false);
+                        var rewardRt = rewardGo.AddComponent<RectTransform>();
+                        rewardRt.anchorMin = new Vector2(1, 0.5f);
+                        rewardRt.anchorMax = new Vector2(1, 0.5f);
+                        rewardRt.pivot = new Vector2(1, 0.5f);
+                        rewardRt.anchoredPosition = new Vector2(-20, 0);
+                        rewardRt.sizeDelta = new Vector2(140, 60);
+                        var rewardText = rewardGo.AddComponent<TextMeshProUGUI>();
+                        rewardText.text = $"+{item.RewardPoints} pts";
+                        rewardText.fontSize = 20;
+                        rewardText.alignment = TextAlignmentOptions.Right;
+                        rewardText.color = new Color(0.95f, 0.75f, 0.2f, 0.8f);
+                    }
+                }
+
+                // Fade in row
+                if (rowRt != null)
+                {
+                    rowRt.localScale = new Vector3(0.9f, 0.9f, 1f);
+                    rowRt.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetDelay(i * 0.1f).SetUpdate(true);
                 }
             }
         }
@@ -545,6 +911,28 @@ namespace StackSurge.UI
             return btn;
         }
 
+        public void UpdateLoadingStatus(string status)
+        {
+            if (_loadingStatusText != null)
+            {
+                _loadingStatusText.text = status;
+            }
+        }
+
+        public void EnableStartButton()
+        {
+            if (_loadingRoot == null) return;
+            var startBtn = _loadingRoot.GetComponent<Button>();
+            if (_loadingStatusText != null)
+            {
+                _loadingStatusText.transform.DOKill();
+                _loadingStatusText.text = "TAP TO START";
+                _loadingStatusText.color = new Color(0.4f, 0.8f, 1.0f, 0.8f);
+                _loadingStatusText.transform.DOScale(1.1f, 0.8f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+            }
+            if (startBtn != null) startBtn.interactable = true;
+        }
+
         private void BuildLoadingScreen(Transform parent)
         {
             // FREEZE THE GAME: This is the ONLY way to guarantee the game timer doesn't tick during load.
@@ -596,17 +984,6 @@ namespace StackSurge.UI
                     glow.rectTransform.DOScale(1.15f, 3.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
                 }
             }
-
-            // Transition to 'TAP TO START' after initialization delay
-            DG.Tweening.DOVirtual.DelayedCall(2.0f, () => {
-                if (_loadingStatusText != null)
-                {
-                    _loadingStatusText.text = "TAP TO START";
-                    _loadingStatusText.color = new Color(0.4f, 0.8f, 1.0f, 0.8f);
-                    _loadingStatusText.transform.DOScale(1.1f, 0.8f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
-                }
-                if (startBtn != null) startBtn.interactable = true;
-            }).SetUpdate(true);
         }
 
         private void CreateGlow(Transform parent, Color color, float size, float duration)
