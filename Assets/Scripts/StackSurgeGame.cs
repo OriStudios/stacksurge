@@ -20,6 +20,7 @@ namespace StackSurge
         [SerializeField] ChallengeDefinition[] _challengeAssets;
 
         [SerializeField] GameView _view;
+        [SerializeField] LeaderboardManager _leaderboardManager;
         GameBoard _board;
         ScoreService _score;
         SaveData _save;
@@ -86,7 +87,7 @@ namespace StackSurge
             await _provider.InitializeAsync(_save, defs);
 
             _leaderboardService = new LeaderboardService(_provider.IsOnline);
-            _view.SetLeaderboardCallbacks(
+            _leaderboardManager.SetLeaderboardCallbacks(
                 () => _leaderboardService.GetTopScoresAsync(),
                 async name =>
                 {

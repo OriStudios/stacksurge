@@ -66,14 +66,6 @@ namespace StackSurge.UI
 
         private int _lastScore = 0;
 
-        // ── Leaderboard ───────────────────────────────────────────────────────
-        Func<Task<LeaderboardEntryData[]>> _getLeaderboardScores;
-        Func<string, Task> _setPlayerName;
-        Func<string> _getPlayerName;
-        GameObject _leaderboardRoot;
-        Transform _leaderboardRowContainer;
-        TextMeshProUGUI _leaderboardStatusText;
-        TMP_InputField _playerNameInput;
         private Color completedColor = new(0.29f, 0.87f, 0.50f); // #4ADE80
         private Color pendingColor = new(0.29f, 0.33f, 0.39f);   // #4B5563
 
@@ -101,7 +93,7 @@ namespace StackSurge.UI
 
             if (_challengesButton != null) _challengesButton.onClick.AddListener(ToggleChallenges);
             if (_helpButton != null) _helpButton.onClick.AddListener(ToggleHelp);
-            if (_leaderboardButton != null) _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
+            //if (_leaderboardButton != null) _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
 
             // Hide old challenges body text and prepare the row container
             if (_challengesBody != null)
@@ -819,7 +811,7 @@ namespace StackSurge.UI
                 BuildLoadingScreen(transform);
             }
 
-            BuildLeaderboardPanel();
+            //BuildLeaderboardPanel();
         }
 
         private Image CreatePreviewSlot(Transform parent, string label, Vector2 pos, out TextMeshProUGUI innerLabel)
@@ -943,6 +935,7 @@ namespace StackSurge.UI
             }
         }
 
+        /*
         // ─────────────────────────────────────────────────────────────────────
         // Leaderboard
         // ─────────────────────────────────────────────────────────────────────
@@ -1387,7 +1380,7 @@ namespace StackSurge.UI
             t.alignment = TextAlignmentOptions.Center;
             t.color = new Color(1f, 0.55f, 0.55f);
             t.raycastTarget = false;
-        }
+        } */
 
         public void EnableStartButton()
         {
