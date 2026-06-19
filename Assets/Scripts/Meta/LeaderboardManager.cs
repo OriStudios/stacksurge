@@ -26,10 +26,19 @@ namespace StackSurge.Meta
         private Func<string, Task> _setPlayerName;
         private Func<string> _getPlayerName;
 
+        [SerializeField] private Button _setPlayerNameButton;
+        [SerializeField] private Button _closeButton;
+
         void Awake()
         {
             if (_leaderboardButton != null)
                 _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
+
+            if (_setPlayerNameButton != null)
+                _setPlayerNameButton.onClick.AddListener(OnSetPlayerName);
+
+            if (_closeButton != null)
+                _closeButton.onClick.AddListener(ToggleLeaderboard);
         }
 
         // --- INITIALIZATION ---

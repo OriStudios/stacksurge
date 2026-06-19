@@ -1,0 +1,14 @@
+fileFormatVersion: 2
+guid: 5eff173642e9e1b4ea39e9cc8a4e1216
+PrefabImporter:
+  externalObjects: {}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
+AssetOrigin:
+  serializedVersion: 1
+  productId: 130488
+  packageName: Safe Area Helper
+  packageVersion: 1.0.6
+  assetPath: Assets/CrystalFramework/Utility/Demos/SafeAreaToggle.prefab
+  uploadId: 898916
