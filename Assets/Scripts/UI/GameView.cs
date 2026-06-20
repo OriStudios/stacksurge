@@ -28,6 +28,10 @@ namespace StackSurge.UI
         [SerializeField] TextMeshProUGUI _nextInnerLabel;
         [SerializeField] TextMeshProUGUI _queuedInnerLabel;
 
+        //Column buttons
+        [SerializeField] ColumnButtonView _columnButtonPrefab;
+        [SerializeField] Transform _columnButtonsRoot;
+
         [SerializeField] GameObject _helpPanel;
         [SerializeField] Button _closeHelpButton;
         [SerializeField] Canvas _mainCanvas;
@@ -69,6 +73,16 @@ namespace StackSurge.UI
         private Color completedColor = new(0.29f, 0.87f, 0.50f); // #4ADE80
         private Color pendingColor = new(0.29f, 0.33f, 0.39f);   // #4B5563
 
+        // ── Tutorial UI Elements ─────────────────────────────────────────────
+        private GameObject _tutorialDialogGo;
+        private TextMeshProUGUI _tutorialTitleText;
+        private TextMeshProUGUI _tutorialBodyText;
+        private Button _tutorialNextBtn;
+        private bool _tutorialNextClicked;
+        private GameObject[] _colButtonGos;
+
+        public Action OnReplayTutorialTriggered;
+
         void Awake()
         {
             if (_closeHelpButton != null) _closeHelpButton.onClick.AddListener(ToggleHelp);
@@ -104,6 +118,49 @@ namespace StackSurge.UI
             if (_challengesRoot != null)
             {
                 _titleText = _challengesRoot.transform.Find("Title")?.GetComponent<TextMeshProUGUI>();
+            }
+
+            // Append Replay Tutorial Button to Help Panel
+            if (_helpPanel != null)
+            {
+                var oldBtn = _helpPanel.transform.Find("ReplayTutorialBtn");
+                if (oldBtn != null) Destroy(oldBtn.gameObject);
+
+                var replayBtnGo = new GameObject("ReplayTutorialBtn");
+                replayBtnGo.transform.SetParent(_helpPanel.transform, false);
+                var rt = replayBtnGo.AddComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0f);
+                rt.anchorMax = new Vector2(0.5f, 0f);
+                rt.pivot = new Vector2(0.5f, 0f);
+                rt.anchoredPosition = new Vector2(0f, 60f); // 60 pixels above bottom
+                rt.sizeDelta = new Vector2(340f, 80f);
+
+                var img = replayBtnGo.AddComponent<Image>();
+                img.color = new Color(0.95f, 0.75f, 0.2f, 0.95f); // Rich gold background
+
+                var outline = replayBtnGo.AddComponent<Outline>();
+                outline.effectColor = new Color(0f, 0f, 0f, 0.3f);
+                outline.effectDistance = new Vector2(2f, 2f);
+
+                var btn = replayBtnGo.AddComponent<Button>();
+                btn.onClick.AddListener(() =>
+                {
+                    ToggleHelp(); // Close help panel
+                    OnReplayTutorialTriggered?.Invoke();
+                });
+
+                var txtGo = new GameObject("Text");
+                txtGo.transform.SetParent(replayBtnGo.transform, false);
+                var txtRt = txtGo.AddComponent<RectTransform>();
+                txtRt.anchorMin = Vector2.zero;
+                txtRt.anchorMax = Vector2.one;
+                txtRt.sizeDelta = Vector2.zero;
+                var txt = txtGo.AddComponent<TextMeshProUGUI>();
+                txt.text = "REPLAY TUTORIAL";
+                txt.fontSize = 24;
+                txt.fontStyle = FontStyles.Bold;
+                txt.color = Color.black;
+                txt.alignment = TextAlignmentOptions.Center;
             }
         }
 
@@ -755,44 +812,19 @@ namespace StackSurge.UI
                     _cellImages[r, c] = img;
                 }
 
-            float colY = 270f;
+            //Column buttons
+            _colButtonGos = new GameObject[_settings.Columns];
             for (int c = 0; c < _settings.Columns; c++)
             {
                 int col = c;
-                var btnGo = new GameObject($"Col{c}");
-                btnGo.transform.SetParent(_hudRoot.transform, false);
-                var rt = btnGo.AddComponent<RectTransform>();
-                rt.anchorMin = new Vector2(0.5f, 0);
-                rt.anchorMax = new Vector2(0.5f, 0);
-                rt.pivot = new Vector2(0.5f, 0);
-                rt.sizeDelta = new Vector2(cw - 2f, 80f);
-                rt.anchoredPosition = new Vector2((c - (_settings.Columns - 1) / 2f) * cw, colY);
-                var img = btnGo.AddComponent<Image>();
-                img.color = new Color(1f, 1f, 1f, 0.05f);
-                var btn = btnGo.AddComponent<Button>();
-                var colors = btn.colors;
-                colors.highlightedColor = new Color(1f, 1f, 1f, 0.15f);
-                colors.pressedColor = new Color(1f, 1f, 1f, 0.3f);
-                btn.colors = colors;
-                btn.onClick.AddListener(() =>
-                {
-                    _onColumnClicked?.Invoke(col);
-                });
+                var view = Instantiate(_columnButtonPrefab, _columnButtonsRoot);
+                var btnGo = view.gameObject;
+                btnGo.name = $"Col{c}";
+                _colButtonGos[c] = btnGo;
 
-                var labelGo = new GameObject("Label");
-                labelGo.transform.SetParent(btnGo.transform, false);
-                var lrt = labelGo.AddComponent<RectTransform>();
-                lrt.anchorMin = new Vector2(0.5f, 0f);
-                lrt.anchorMax = new Vector2(0.5f, 0f);
-                lrt.pivot = new Vector2(0.5f, 0f);
-                lrt.sizeDelta = new Vector2(cw, 80f);
-                lrt.anchoredPosition = new Vector2(0, 0f);
-                var lt = labelGo.AddComponent<TextMeshProUGUI>();
-                lt.text = (c + 1).ToString();
-                lt.fontSize = 54;
-                lt.alignment = TextAlignmentOptions.Center;
-                lt.color = new Color(0.8f, 0.8f, 0.8f, 0.4f);
-                lt.raycastTarget = false;
+                view.Button.onClick.AddListener(() => _onColumnClicked?.Invoke(col));
+
+                view.Label.text = (c + 1).ToString();
             }
 
             if (_gameOverRoot != null)
@@ -1473,6 +1505,296 @@ namespace StackSurge.UI
                 _loadingRoot.SetActive(false);
                 OnLoadingDone?.Invoke();
             });
+        }
+
+        // ── Tutorial Controller Extensions ───────────────────────────────────
+
+        public IEnumerator ShowTutorialDialogCoroutine(string title, string body, bool showNextButton)
+        {
+            _tutorialNextClicked = false;
+            ShowTutorialDialog(title, body, showNextButton);
+            if (showNextButton)
+            {
+                yield return new WaitUntil(() => _tutorialNextClicked);
+            }
+        }
+
+        public void ShowTutorialDialog(string title, string body, bool showNextButton)
+        {
+            if (_tutorialDialogGo == null)
+            {
+                _tutorialDialogGo = new GameObject("TutorialDialogPanel");
+                _tutorialDialogGo.transform.SetParent(_mainCanvas != null ? _mainCanvas.transform : transform, false);
+                var rt = _tutorialDialogGo.AddComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 1f);
+                rt.anchorMax = new Vector2(0.5f, 1f);
+                rt.pivot = new Vector2(0.5f, 1f);
+                rt.anchoredPosition = new Vector2(0f, -140f);
+                rt.sizeDelta = new Vector2(660f, 260f);
+
+                var bgImg = _tutorialDialogGo.AddComponent<Image>();
+                bgImg.color = new Color(0.06f, 0.06f, 0.08f, 0.98f);
+
+                var outline = _tutorialDialogGo.AddComponent<Outline>();
+                outline.effectColor = new Color(0.2f, 0.6f, 1.0f, 0.5f);
+                outline.effectDistance = new Vector2(3f, 3f);
+
+                var titleGo = new GameObject("Title");
+                titleGo.transform.SetParent(_tutorialDialogGo.transform, false);
+                var titleRt = titleGo.AddComponent<RectTransform>();
+                titleRt.anchorMin = new Vector2(0f, 1f);
+                titleRt.anchorMax = new Vector2(1f, 1f);
+                titleRt.pivot = new Vector2(0.5f, 1f);
+                titleRt.anchoredPosition = new Vector2(0f, -15f);
+                titleRt.sizeDelta = new Vector2(-40f, 45f);
+                _tutorialTitleText = titleGo.AddComponent<TextMeshProUGUI>();
+                _tutorialTitleText.fontSize = 28;
+                _tutorialTitleText.fontStyle = FontStyles.Bold;
+                _tutorialTitleText.color = new Color(0.2f, 0.6f, 1.0f);
+                _tutorialTitleText.alignment = TextAlignmentOptions.Left;
+
+                var bodyGo = new GameObject("Body");
+                bodyGo.transform.SetParent(_tutorialDialogGo.transform, false);
+                var bodyRt = bodyGo.AddComponent<RectTransform>();
+                bodyRt.anchorMin = new Vector2(0f, 1f);
+                bodyRt.anchorMax = new Vector2(1f, 1f);
+                bodyRt.pivot = new Vector2(0.5f, 1f);
+                bodyRt.anchoredPosition = new Vector2(0f, -65f);
+                bodyRt.sizeDelta = new Vector2(-40f, 110f);
+                _tutorialBodyText = bodyGo.AddComponent<TextMeshProUGUI>();
+                _tutorialBodyText.fontSize = 20;
+                _tutorialBodyText.color = new Color(0.9f, 0.9f, 0.95f);
+                _tutorialBodyText.alignment = TextAlignmentOptions.Left;
+                _tutorialBodyText.overflowMode = TextOverflowModes.Ellipsis;
+
+                var btnGo = new GameObject("NextBtn");
+                btnGo.transform.SetParent(_tutorialDialogGo.transform, false);
+                var btnRt = btnGo.AddComponent<RectTransform>();
+                btnRt.anchorMin = new Vector2(1f, 0f);
+                btnRt.anchorMax = new Vector2(1f, 0f);
+                btnRt.pivot = new Vector2(1f, 0f);
+                btnRt.anchoredPosition = new Vector2(-20f, 20f);
+                btnRt.sizeDelta = new Vector2(160f, 50f);
+                var btnImg = btnGo.AddComponent<Image>();
+                btnImg.color = new Color(0.2f, 0.6f, 1.0f, 1.0f);
+                _tutorialNextBtn = btnGo.AddComponent<Button>();
+                _tutorialNextBtn.onClick.AddListener(() =>
+                {
+                    _tutorialNextClicked = true;
+                });
+
+                var btnTxtGo = new GameObject("Text");
+                btnTxtGo.transform.SetParent(btnGo.transform, false);
+                var btnTxtRt = btnTxtGo.AddComponent<RectTransform>();
+                btnTxtRt.anchorMin = Vector2.zero;
+                btnTxtRt.anchorMax = Vector2.one;
+                btnTxtRt.sizeDelta = Vector2.zero;
+                var btnTxt = btnTxtGo.AddComponent<TextMeshProUGUI>();
+                btnTxt.text = "NEXT";
+                btnTxt.fontSize = 22;
+                btnTxt.fontStyle = FontStyles.Bold;
+                btnTxt.color = Color.white;
+                btnTxt.alignment = TextAlignmentOptions.Center;
+            }
+
+            _tutorialDialogGo.SetActive(true);
+            _tutorialDialogGo.transform.SetAsLastSibling();
+            _tutorialTitleText.text = title;
+            _tutorialBodyText.text = body;
+            _tutorialNextBtn.gameObject.SetActive(showNextButton);
+
+            var bRt = _tutorialBodyText.GetComponent<RectTransform>();
+            if (showNextButton)
+            {
+                bRt.sizeDelta = new Vector2(-40f, 110f);
+            }
+            else
+            {
+                bRt.sizeDelta = new Vector2(-40f, 170f);
+            }
+
+            _tutorialDialogGo.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
+            _tutorialDialogGo.transform.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
+        }
+
+        public void ShowTutorialChoiceDialog(string title, string body, Action onPlay, Action onSkip)
+        {
+            ShowTutorialDialog(title, body, false);
+
+            var playBtnGo = new GameObject("PlayTutorialChoiceBtn");
+            playBtnGo.transform.SetParent(_tutorialDialogGo.transform, false);
+            var rtPlay = playBtnGo.AddComponent<RectTransform>();
+            rtPlay.anchorMin = new Vector2(0.5f, 0f);
+            rtPlay.anchorMax = new Vector2(0.5f, 0f);
+            rtPlay.pivot = new Vector2(1f, 0f);
+            rtPlay.anchoredPosition = new Vector2(-15f, 20f);
+            rtPlay.sizeDelta = new Vector2(200f, 50f);
+            var imgPlay = playBtnGo.AddComponent<Image>();
+            imgPlay.color = new Color(0.2f, 0.6f, 1.0f, 1.0f);
+            var btnPlay = playBtnGo.AddComponent<Button>();
+            btnPlay.onClick.AddListener(() =>
+            {
+                Destroy(playBtnGo);
+                var skipBtn = _tutorialDialogGo.transform.Find("SkipTutorialChoiceBtn");
+                if (skipBtn != null) Destroy(skipBtn.gameObject);
+                onPlay?.Invoke();
+            });
+            var txtPlayGo = new GameObject("Text");
+            txtPlayGo.transform.SetParent(playBtnGo.transform, false);
+            var txtPlayRt = txtPlayGo.AddComponent<RectTransform>();
+            txtPlayRt.anchorMin = Vector2.zero;
+            txtPlayRt.anchorMax = Vector2.one;
+            txtPlayRt.sizeDelta = Vector2.zero;
+            var txtPlay = txtPlayGo.AddComponent<TextMeshProUGUI>();
+            txtPlay.text = "TUTORIAL";
+            txtPlay.fontSize = 20;
+            txtPlay.fontStyle = FontStyles.Bold;
+            txtPlay.color = Color.white;
+            txtPlay.alignment = TextAlignmentOptions.Center;
+
+            var skipBtnGo = new GameObject("SkipTutorialChoiceBtn");
+            skipBtnGo.transform.SetParent(_tutorialDialogGo.transform, false);
+            var rtSkip = skipBtnGo.AddComponent<RectTransform>();
+            rtSkip.anchorMin = new Vector2(0.5f, 0f);
+            rtSkip.anchorMax = new Vector2(0.5f, 0f);
+            rtSkip.pivot = new Vector2(0f, 0f);
+            rtSkip.anchoredPosition = new Vector2(15f, 20f);
+            rtSkip.sizeDelta = new Vector2(200f, 50f);
+            var imgSkip = skipBtnGo.AddComponent<Image>();
+            imgSkip.color = new Color(0.25f, 0.25f, 0.28f, 1.0f);
+            var btnSkip = skipBtnGo.AddComponent<Button>();
+            btnSkip.onClick.AddListener(() =>
+            {
+                Destroy(skipBtnGo);
+                var playBtn = _tutorialDialogGo.transform.Find("PlayTutorialChoiceBtn");
+                if (playBtn != null) Destroy(playBtn.gameObject);
+                onSkip?.Invoke();
+            });
+            var txtSkipGo = new GameObject("Text");
+            txtSkipGo.transform.SetParent(skipBtnGo.transform, false);
+            var txtSkipRt = txtSkipGo.AddComponent<RectTransform>();
+            txtSkipRt.anchorMin = Vector2.zero;
+            txtSkipRt.anchorMax = Vector2.one;
+            txtSkipRt.sizeDelta = Vector2.zero;
+            var txtSkip = txtSkipGo.AddComponent<TextMeshProUGUI>();
+            txtSkip.text = "SKIP";
+            txtSkip.fontSize = 20;
+            txtSkip.fontStyle = FontStyles.Bold;
+            txtSkip.color = Color.white;
+            txtSkip.alignment = TextAlignmentOptions.Center;
+        }
+
+        public void HideTutorialDialog()
+        {
+            if (_tutorialDialogGo != null)
+            {
+                _tutorialDialogGo.SetActive(false);
+            }
+        }
+
+        public void HighlightColumn(int colIndex)
+        {
+            if (_colButtonGos == null) return;
+
+            for (int c = 0; c < _colButtonGos.Length; c++)
+            {
+                var btnGo = _colButtonGos[c];
+                if (btnGo == null) continue;
+
+                var btn = btnGo.GetComponent<Button>();
+
+                if (c == colIndex)
+                {
+                    var img = btnGo.GetComponent<Image>();
+                    if (img != null) img.color = new Color(1f, 1f, 1f, 0.1f);
+                    if (btn != null) btn.interactable = true;
+
+                    var overlayGo = new GameObject("TutorialHighlightOverlay");
+                    overlayGo.transform.SetParent(btnGo.transform, false);
+                    var ort = overlayGo.AddComponent<RectTransform>();
+                    ort.anchorMin = Vector2.zero;
+                    ort.anchorMax = Vector2.one;
+                    ort.sizeDelta = Vector2.zero;
+                    var oimg = overlayGo.AddComponent<Image>();
+                    oimg.color = new Color(0.95f, 0.75f, 0.2f, 0.2f);
+                    overlayGo.transform.DOScale(1.08f, 0.6f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+
+                    var arrowGo = new GameObject("TutorialArrow");
+                    arrowGo.transform.SetParent(btnGo.transform, false);
+                    var art = arrowGo.AddComponent<RectTransform>();
+                    art.anchoredPosition = new Vector2(0f, 80f);
+                    art.sizeDelta = new Vector2(60f, 60f);
+                    var txt = arrowGo.AddComponent<TextMeshProUGUI>();
+                    txt.text = "▼";
+                    txt.fontSize = 44;
+                    txt.color = new Color(0.95f, 0.75f, 0.2f, 1f);
+                    txt.fontStyle = FontStyles.Bold;
+                    txt.alignment = TextAlignmentOptions.Center;
+                    art.DOAnchorPosY(100f, 0.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+
+                    for (int r = 0; r < _settings.Rows; r++)
+                    {
+                        var cellImg = _cellImages[r, c];
+                        if (cellImg != null)
+                        {
+                            var colVal = cellImg.color;
+                            colVal.a = 1.0f;
+                            cellImg.color = colVal;
+                        }
+                    }
+                }
+                else
+                {
+                    var img = btnGo.GetComponent<Image>();
+                    if (img != null) img.color = new Color(1f, 1f, 1f, 0.01f);
+                    if (btn != null) btn.interactable = false;
+
+                    for (int r = 0; r < _settings.Rows; r++)
+                    {
+                        var cellImg = _cellImages[r, c];
+                        if (cellImg != null)
+                        {
+                            var colVal = cellImg.color;
+                            colVal.a = 0.15f;
+                            cellImg.color = colVal;
+                        }
+                    }
+                }
+            }
+        }
+
+        public void ClearColumnHighlight()
+        {
+            if (_colButtonGos == null) return;
+
+            for (int c = 0; c < _colButtonGos.Length; c++)
+            {
+                var btnGo = _colButtonGos[c];
+                if (btnGo == null) continue;
+
+                var btn = btnGo.GetComponent<Button>();
+                if (btn != null) btn.interactable = true;
+
+                var img = btnGo.GetComponent<Image>();
+                if (img != null) img.color = new Color(1f, 1f, 1f, 0.05f);
+
+                var overlay = btnGo.transform.Find("TutorialHighlightOverlay");
+                if (overlay != null) Destroy(overlay.gameObject);
+
+                var arrow = btnGo.transform.Find("TutorialArrow");
+                if (arrow != null) Destroy(arrow.gameObject);
+
+                for (int r = 0; r < _settings.Rows; r++)
+                {
+                    var cellImg = _cellImages[r, c];
+                    if (cellImg != null)
+                    {
+                        var colVal = cellImg.color;
+                        colVal.a = 1.0f;
+                        cellImg.color = colVal;
+                    }
+                }
+            }
         }
     }
 }

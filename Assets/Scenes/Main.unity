@@ -1431,6 +1431,8 @@ MonoBehaviour:
   _queuedPreviewImg: {fileID: 7844183788334550267}
   _nextInnerLabel: {fileID: 7045638873299435647}
   _queuedInnerLabel: {fileID: 3601225025367486427}
+  _columnButtonPrefab: {fileID: -7598592049967134664, guid: f68f7210612e647078b4ed0a9b7ffad6, type: 3}
+  _columnButtonsRoot: {fileID: 6046290096229021362}
   _helpPanel: {fileID: 1344920716}
   _closeHelpButton: {fileID: 1227270336}
   _mainCanvas: {fileID: 8466490184709892897}
@@ -4555,6 +4557,25 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 549592400073307277}
   m_CullTransparentMesh: 1
+--- !u!224 &6046290096229021362
+RectTransform:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8549903947792994385}
+  m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
+  m_LocalPosition: {x: 0, y: 0, z: 0}
+  m_LocalScale: {x: 1, y: 1, z: 1}
+  m_ConstrainProportionsScale: 0
+  m_Children: []
+  m_Father: {fileID: 8501531454465078476}
+  m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+  m_AnchorMin: {x: 0.5, y: 0}
+  m_AnchorMax: {x: 0.5, y: 0}
+  m_AnchoredPosition: {x: 0, y: 200}
+  m_SizeDelta: {x: 740, y: 80}
+  m_Pivot: {x: 0.5, y: 0}
 --- !u!224 &6074448844344029047
 RectTransform:
   m_ObjectHideFlags: 0
@@ -5751,6 +5772,7 @@ RectTransform:
   - {fileID: 9094456817441481371}
   - {fileID: 365668970109900494}
   - {fileID: 64185593}
+  - {fileID: 6046290096229021362}
   m_Father: {fileID: 1035950909}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
   m_AnchorMin: {x: 0, y: 0}
@@ -5777,6 +5799,49 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
+--- !u!1 &8549903947792994385
+GameObject:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  serializedVersion: 6
+  m_Component:
+  - component: {fileID: 6046290096229021362}
+  - component: {fileID: 8549903947792994386}
+  m_Layer: 0
+  m_Name: ColumnButtonsParent
+  m_TagString: Untagged
+  m_Icon: {fileID: 0}
+  m_NavMeshLayer: 0
+  m_StaticEditorFlags: 0
+  m_IsActive: 1
+--- !u!114 &8549903947792994386
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 8549903947792994385}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 30649d3a9faa99c48a7b1166b86bf2a0, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.HorizontalLayoutGroup
+  m_Padding:
+    m_Left: 0
+    m_Right: 0
+    m_Top: 0
+    m_Bottom: 0
+  m_ChildAlignment: 4
+  m_Spacing: 8
+  m_ChildForceExpandWidth: 0
+  m_ChildForceExpandHeight: 1
+  m_ChildControlWidth: 0
+  m_ChildControlHeight: 0
+  m_ChildScaleWidth: 0
+  m_ChildScaleHeight: 0
+  m_ReverseArrangement: 0
 --- !u!222 &8602603236879859350
 CanvasRenderer:
   m_ObjectHideFlags: 0

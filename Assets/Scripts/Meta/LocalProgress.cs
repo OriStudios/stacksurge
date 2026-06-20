@@ -25,6 +25,9 @@ namespace StackSurge.Meta
 
         /// <summary>Display name chosen by the player, synced to UGS Authentication.</summary>
         public string PlayerDisplayName = "";
+
+        /// <summary>True if the user has completed or skipped the interactive tutorial.</summary>
+        public bool TutorialCompleted;
     }
 
     public static class LocalProgress

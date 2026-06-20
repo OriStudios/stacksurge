@@ -39,6 +39,73 @@ namespace StackSurge
 
         [SerializeField] float _blinkTime = 0.25f;
 
+        // ── Tutorial Fields & Properties ─────────────────────────────────────
+        private bool _inTutorial = false;
+        private int _tutorialRequiredColumn = -1;
+        private TutorialController _tutorialController;
+        private Coroutine _tutorialCoroutine;
+
+        internal GameBoard Board => _board;
+        internal GameView View => _view;
+        internal SaveData Save => _save;
+
+        internal TileKind Current
+        {
+            get => _current;
+            set => _current = value;
+        }
+
+        internal TileKind Next
+        {
+            get => _next;
+            set => _next = value;
+        }
+
+        internal bool InTutorial
+        {
+            get => _inTutorial;
+            set => _inTutorial = value;
+        }
+
+        internal int TutorialRequiredColumn
+        {
+            get => _tutorialRequiredColumn;
+            set => _tutorialRequiredColumn = value;
+        }
+
+        internal bool ResolvingMatches => _resolvingMatches;
+
+        internal void InitializeBoardForTutorial()
+        {
+            _board = new GameBoard(_settings.Columns, _settings.Rows);
+            _score = new ScoreService();
+            _score.Reset(_settings.ComboWindowSeconds);
+            _timeAlive = 0f;
+            _riseAccumulator = 0f;
+            _slowFillBuff = 0f;
+            _playing = true;
+            _resolvingMatches = false;
+        }
+
+        internal void RunUpdateHud() => UpdateHud();
+        internal void RunBeginRun() => BeginRun();
+
+        internal IEnumerator RunRiseRowAndResolve()
+        {
+            yield return StartCoroutine(RiseRowAndResolve());
+        }
+
+        internal IEnumerator RunResolveMatchesAnim()
+        {
+            yield return StartCoroutine(ResolveMatchesAnimCoroutine());
+        }
+
+        public void StartTutorial()
+        {
+            StopAllCoroutines();
+            _tutorialCoroutine = StartCoroutine(_tutorialController.PlayTutorialCoroutine());
+        }
+
         static ChallengeDefinition[] BuildDefaultChallenges()
         {
             ChallengeDefinition C(string title, string desc, ChallengeType ty, int target)
@@ -78,8 +145,11 @@ namespace StackSurge
             if (_view == null) _view = gameObject.AddComponent<GameView>();
             _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengeDisplayData, GetTimeUntilReset, ClaimReward);
 
+            _tutorialController = new TutorialController(this);
+            _view.OnReplayTutorialTriggered = StartTutorial;
+
             // Game starts only after loading screen finishes fading
-            _view.OnLoadingDone = BeginRun;
+            _view.OnLoadingDone = OnLoadingScreenFinished;
 
             // UGS / Challenges async initialization
             _view.UpdateLoadingStatus("CONNECTING TO SERVICES...");
@@ -111,7 +181,7 @@ namespace StackSurge
 
         void Update()
         {
-            if (!_playing || _resolvingMatches) return;
+            if (!_playing || _resolvingMatches || _inTutorial) return;
 
             _timeAlive += Time.deltaTime;
             _score.TickSurvivalBonus(Time.deltaTime, _board.GetOccupancy01());
@@ -186,16 +256,32 @@ namespace StackSurge
         {
             if (!_playing || _resolvingMatches) return;
 
+            // If in tutorial mode, only allow dropping in the required column
+            if (_inTutorial && _tutorialRequiredColumn != -1 && col != _tutorialRequiredColumn)
+            {
+                return;
+            }
+
             int row = _board.GetLowestEmptyRow(col);
             if (row < 0)
             {
+                if (_inTutorial) return;
+
                 EndRun();
                 return;
             }
 
             var placed = _current;
-            _current = _next;
-            _next = RollIncomingTile();
+            if (_inTutorial)
+            {
+                _current = _next;
+                // Defer changing _next to the tutorial controller setup
+            }
+            else
+            {
+                _current = _next;
+                _next = RollIncomingTile();
+            }
 
             if (placed == TileKind.Bomb)
             {
@@ -420,6 +506,31 @@ namespace StackSurge
                 _provider.ClaimReward(index);
                 // Also trigger save immediately to persist the claim
                 _ = _provider.SaveAsync();
+            }
+        }
+
+        void OnLoadingScreenFinished()
+        {
+            if (!_save.TutorialCompleted)
+            {
+                _view.ShowTutorialChoiceDialog(
+                    "Welcome to Stack Surge!",
+                    "Would you like to play the interactive tutorial to learn the basics?",
+                    onPlay: () =>
+                    {
+                        StartTutorial();
+                    },
+                    onSkip: () =>
+                    {
+                        _save.TutorialCompleted = true;
+                        LocalProgress.Save(_save);
+                        BeginRun();
+                    }
+                );
+            }
+            else
+            {
+                BeginRun();
             }
         }
     }
