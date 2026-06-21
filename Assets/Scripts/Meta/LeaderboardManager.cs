@@ -29,6 +29,11 @@ namespace StackSurge.Meta
         [SerializeField] private Button _setPlayerNameButton;
         [SerializeField] private Button _closeButton;
 
+        //restore old leaderboard scores from archive
+        //[SerializeField] private Button _restoreArchiveButton;
+        //[SerializeField] private string _leaderboardId = "all_time_highs";
+        //[SerializeField] private string _archivedVersionId = "20260617043612741436307";
+
         void Awake()
         {
             if (_leaderboardButton != null)
@@ -39,7 +44,23 @@ namespace StackSurge.Meta
 
             if (_closeButton != null)
                 _closeButton.onClick.AddListener(ToggleLeaderboard);
+
+            //if (_restoreArchiveButton != null)
+            //    _restoreArchiveButton.onClick.AddListener(OnRestoreArchive);
         }
+
+        //Restore archived leaderboard scores when the button is clicked
+        /*
+        public async void OnRestoreArchive()
+        {
+            _leaderboardStatusText.text = "Restoring archived scores...";
+            _leaderboardStatusText.gameObject.SetActive(true);
+
+            await ArchiveRestoreService.RestoreFromArchive(_leaderboardId, _archivedVersionId);
+
+            await Task.Delay(800); // Allow UGS to propagate
+            _ = RefreshLeaderboard();
+        } */
 
         // --- INITIALIZATION ---
         public void SetLeaderboardCallbacks(

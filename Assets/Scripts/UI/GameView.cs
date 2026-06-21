@@ -1668,6 +1668,7 @@ namespace StackSurge.UI
                 Destroy(skipBtnGo);
                 var playBtn = _tutorialDialogGo.transform.Find("PlayTutorialChoiceBtn");
                 if (playBtn != null) Destroy(playBtn.gameObject);
+                HideTutorialDialog();
                 onSkip?.Invoke();
             });
             var txtSkipGo = new GameObject("Text");
