@@ -121,7 +121,7 @@ namespace StackSurge.Core
                 ApplyGravity();
 
                 bool perfect = IsBoardEmpty();
-                score.RegisterClearWave(largestInWave, cleared, fullRow, perfect, timeNow, out _);
+                score.RegisterClearWave(largestInWave, cleared, fullRow, perfect, timeNow, out _, out _, out _);
 
                 if (perfect)
                 {

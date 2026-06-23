@@ -859,6 +859,192 @@ namespace StackSurge.UI
             _shake.AddShake(shake, 0.12f);
         }
 
+        // ── Reward Toast / Badge ──────────────────────────────────────────────
+        RectTransform _toastParent;  // lazy – created on first use
+
+        RectTransform GetToastParent()
+        {
+            if (_toastParent != null) return _toastParent;
+            var go = new GameObject("ToastLayer");
+            var parent = (_mainCanvas != null ? _mainCanvas.transform : transform);
+            go.transform.SetParent(parent, false);
+            _toastParent = go.AddComponent<RectTransform>();
+            _toastParent.anchorMin = Vector2.zero;
+            _toastParent.anchorMax = Vector2.one;
+            _toastParent.offsetMin = Vector2.zero;
+            _toastParent.offsetMax = Vector2.zero;
+            return _toastParent;
+        }
+
+        /// <summary>
+        /// Spawns a floating animated reward label in the centre of the screen.
+        /// Multiple toasts stack vertically so they don't overlap.
+        /// </summary>
+        public void ShowRewardToast(string label, string sub, RewardToastStyle style)
+        {
+            var parent = GetToastParent();
+
+            // Count existing toasts to offset vertically
+            int existingCount = 0;
+            for (int i = 0; i < parent.childCount; i++)
+                if (parent.GetChild(i).name == "RewardToast") existingCount++;
+
+            // ── Colours ───────────────────────────────────────────────────────
+            Color accent = style switch
+            {
+                RewardToastStyle.PerfectClear => new Color(1f, 0.84f, 0f),      // gold
+                RewardToastStyle.RowClear     => new Color(0.4f, 0.9f, 1f),     // cyan
+                RewardToastStyle.Combo        => new Color(1f, 0.45f, 0.15f),   // orange
+                RewardToastStyle.Carry        => new Color(0.6f, 0.9f, 0.4f),   // green
+                _                             => Color.white
+            };
+
+            // ── Container ─────────────────────────────────────────────────────
+            var go = new GameObject("RewardToast");
+            go.transform.SetParent(parent, false);
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.6f);
+            rt.anchorMax = new Vector2(0.5f, 0.6f);
+            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(400f, 80f);
+            rt.anchoredPosition = new Vector2(0f, existingCount * 90f);
+
+            // ── Main label ────────────────────────────────────────────────────
+            var textGo = new GameObject("Label");
+            textGo.transform.SetParent(go.transform, false);
+            var txt = textGo.AddComponent<TextMeshProUGUI>();
+            txt.text = label;
+            txt.fontSize = style == RewardToastStyle.PerfectClear ? 52 :
+                           style == RewardToastStyle.Combo        ? 58 : 46;
+            txt.fontStyle = FontStyles.Bold;
+            txt.color = accent;
+            txt.alignment = TextAlignmentOptions.Center;
+            txt.enableAutoSizing = false;
+            var trt = textGo.GetComponent<RectTransform>();
+            trt.anchorMin = Vector2.zero;
+            trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = Vector2.zero;
+
+            // ── Sub-label (points) ────────────────────────────────────────────
+            if (!string.IsNullOrEmpty(sub))
+            {
+                var subGo = new GameObject("Sub");
+                subGo.transform.SetParent(go.transform, false);
+                var subTxt = subGo.AddComponent<TextMeshProUGUI>();
+                subTxt.text = sub;
+                subTxt.fontSize = 30;
+                subTxt.color = new Color(accent.r, accent.g, accent.b, 0.85f);
+                subTxt.alignment = TextAlignmentOptions.Center;
+                var srt = subGo.GetComponent<RectTransform>();
+                srt.anchorMin = new Vector2(0f, -0.6f);
+                srt.anchorMax = new Vector2(1f, -0.6f);
+                srt.sizeDelta = new Vector2(0f, 40f);
+            }
+
+            // ── Animation ────────────────────────────────────────────────────
+            var cg = go.AddComponent<CanvasGroup>();
+            cg.alpha = 0f;
+
+            float totalDuration = style == RewardToastStyle.PerfectClear ? 2.2f : 1.6f;
+
+            // Fade in fast, hold, fade out
+            var seq = DOTween.Sequence().SetUpdate(true);
+            seq.Append(cg.DOFade(1f, 0.18f).SetUpdate(true));
+            seq.AppendInterval(totalDuration - 0.55f);
+            seq.Append(cg.DOFade(0f, 0.35f).SetUpdate(true));
+            seq.OnComplete(() => { if (go != null) Destroy(go); });
+
+            // Float upward
+            rt.DOAnchorPosY(rt.anchoredPosition.y + 120f, totalDuration + 0.05f)
+              .SetEase(Ease.OutCubic).SetUpdate(true);
+
+            // Scale punch on appear
+            go.transform.localScale = Vector3.one * 0.5f;
+            go.transform.DOScale(1f, 0.22f).SetEase(Ease.OutBack).SetUpdate(true);
+
+            // Combo gets a continuous pulse
+            if (style == RewardToastStyle.Combo)
+                txt.transform.DOScale(1.06f, 0.25f).SetLoops(4, LoopType.Yoyo)
+                   .SetEase(Ease.InOutSine).SetUpdate(true);
+
+            // Perfect clear gets a shimmer outline
+            if (style == RewardToastStyle.PerfectClear)
+            {
+                txt.fontStyle |= FontStyles.Underline;
+                txt.outlineWidth = 0.15f;
+                txt.outlineColor = new Color32(255, 255, 200, 200);
+            }
+        }
+
+        // Persistent badge – e.g. "SLOW RISE" while SlowFillBuff is active
+        GameObject _slowRiseBadgeGo;
+        Coroutine _slowRiseExpireCoroutine;
+
+        public void ShowSlowRiseBadge(float durationSeconds)
+        {
+            // Kill any existing badge
+            if (_slowRiseBadgeGo != null) { Destroy(_slowRiseBadgeGo); _slowRiseBadgeGo = null; }
+            if (_slowRiseExpireCoroutine != null) { StopCoroutine(_slowRiseExpireCoroutine); _slowRiseExpireCoroutine = null; }
+
+            var parent = GetToastParent();
+
+            var go = new GameObject("SlowRiseBadge");
+            go.transform.SetParent(parent, false);
+            _slowRiseBadgeGo = go;
+
+            var rt = go.AddComponent<RectTransform>();
+            rt.anchorMin = new Vector2(0.5f, 0.88f);
+            rt.anchorMax = new Vector2(0.5f, 0.88f);
+            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.sizeDelta = new Vector2(320f, 52f);
+
+            // Background pill
+            var bg = go.AddComponent<Image>();
+            bg.color = new Color(0.1f, 0.55f, 0.85f, 0.85f);
+
+            // Label
+            var textGo = new GameObject("Label");
+            textGo.transform.SetParent(go.transform, false);
+            var txt = textGo.AddComponent<TextMeshProUGUI>();
+            txt.text = "⬇ SLOW RISE";
+            txt.fontSize = 28;
+            txt.fontStyle = FontStyles.Bold;
+            txt.color = Color.white;
+            txt.alignment = TextAlignmentOptions.Center;
+            var trt = textGo.GetComponent<RectTransform>();
+            trt.anchorMin = Vector2.zero;
+            trt.anchorMax = Vector2.one;
+            trt.offsetMin = Vector2.zero;
+            trt.offsetMax = Vector2.zero;
+
+            // Entrance animation
+            var cg = go.AddComponent<CanvasGroup>();
+            cg.alpha = 0f;
+            cg.DOFade(1f, 0.3f).SetUpdate(true);
+            go.transform.localScale = Vector3.one * 0.8f;
+            go.transform.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
+
+            // Gentle continuous pulse to stay visible
+            go.transform.DOScale(1.04f, 0.7f).SetLoops(-1, LoopType.Yoyo)
+              .SetEase(Ease.InOutSine).SetUpdate(true);
+
+            // Auto-expire
+            _slowRiseExpireCoroutine = StartCoroutine(ExpireSlowRiseBadge(go, cg, durationSeconds));
+        }
+
+        IEnumerator ExpireSlowRiseBadge(GameObject badge, CanvasGroup cg, float delay)
+        {
+            yield return new WaitForSeconds(delay - 0.5f);
+            if (badge == null) yield break;
+            cg.DOFade(0f, 0.5f).SetUpdate(true).OnComplete(() =>
+            {
+                if (badge != null) Destroy(badge);
+                _slowRiseBadgeGo = null;
+            });
+        }
+        // ─────────────────────────────────────────────────────────────────────
+
         public IEnumerator BlinkTilesCoroutine(IEnumerable<(int r, int c)> tiles, TileKind[,] boardCells, float blinkTime)
         {
             foreach (var m in tiles)
@@ -1556,4 +1742,7 @@ namespace StackSurge.UI
             }
         }
     }
+
+    /// <summary>Style hint for ShowRewardToast so it can pick the right colour and emphasis.</summary>
+    public enum RewardToastStyle { Default, Combo, RowClear, PerfectClear, Carry }
 }

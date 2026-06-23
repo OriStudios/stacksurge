@@ -343,9 +343,25 @@ namespace StackSurge
                 yield return AnimateGravityCoroutine();
 
                 bool perfect = _board.IsBoardEmpty();
-                _score.RegisterClearWave(largestInWave, cleared, hasFullRow, perfect, Time.time, out _);
+                int prevCombo = _score.CurrentComboMultiplier;
+                _score.RegisterClearWave(largestInWave, cleared, hasFullRow, perfect,
+                    Time.time, out int pointsAdded, out int comboMult, out float carryMult);
 
                 _view.TriggerClearShake(cleared);
+
+                // ── Reward toasts ────────────────────────────────────────────
+                if (perfect)
+                    _view.ShowRewardToast("PERFECT CLEAR!", "+2000", RewardToastStyle.PerfectClear);
+                else if (hasFullRow)
+                    _view.ShowRewardToast("ROW CLEAR", "+200", RewardToastStyle.RowClear);
+
+                if (comboMult >= 2)
+                    _view.ShowRewardToast($"COMBO x{comboMult}", string.Empty, RewardToastStyle.Combo);
+
+                if (largestInWave >= 4 && carryMult > 1f)
+                    _view.ShowRewardToast($"CARRY x{carryMult:0.#}", string.Empty, RewardToastStyle.Carry);
+                // ─────────────────────────────────────────────────────────────
+
                 _view.RefreshGrid(_board.Cells);
                 UpdateHud();
 
@@ -358,7 +374,11 @@ namespace StackSurge
                 }
             }
 
-            if (emptyAfter) _slowFillBuff = _settings.SlowFillBuffSeconds;
+            if (emptyAfter)
+            {
+                _slowFillBuff = _settings.SlowFillBuffSeconds;
+                _view.ShowSlowRiseBadge(_settings.SlowFillBuffSeconds);
+            }
 
             _challenges.TickRun(_timeAlive, _score.TotalScore, _score.BestComboMultiplier);
             UpdateHud();

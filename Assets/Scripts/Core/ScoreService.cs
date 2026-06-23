@@ -10,6 +10,8 @@ namespace StackSurge.Core
     {
         public int TotalScore { get; private set; }
         public int BestComboMultiplier { get; private set; }
+        public int CurrentComboMultiplier => Mathf.RoundToInt(_comboMultiplier);
+        public float CurrentCarryMultiplier => _carryMultiplier;
 
         float _carryMultiplier = 1f;
         float _comboMultiplier = 1f;
@@ -40,7 +42,7 @@ namespace StackSurge.Core
         }
 
         public void RegisterClearWave(int largestMatchSize, int tilesCleared, bool fullRowClear, bool perfectClear,
-            float now, out int pointsAdded)
+            float now, out int pointsAdded, out int comboMult, out float carryMult)
         {
             pointsAdded = 0;
 
@@ -82,6 +84,9 @@ namespace StackSurge.Core
                 TotalScore += rowBonus;
                 pointsAdded += rowBonus;
             }
+
+            comboMult = Mathf.RoundToInt(_comboMultiplier);
+            carryMult = _carryMultiplier;
         }
     }
 }
