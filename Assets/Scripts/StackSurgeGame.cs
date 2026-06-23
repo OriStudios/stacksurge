@@ -103,6 +103,11 @@ namespace StackSurge
         public void StartTutorial()
         {
             StopAllCoroutines();
+            Time.timeScale = 1f; // Ensure clock runs — WaitForSeconds blocks if timeScale == 0
+            _view.HideMainMenu();
+            _view.HideGameOver();
+            if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
+            _view.SetTutorialActive(true); // Lock all non-tutorial buttons
             _tutorialCoroutine = StartCoroutine(_tutorialController.PlayTutorialCoroutine());
         }
 
@@ -143,7 +148,20 @@ namespace StackSurge
 
             if (_view == null) _view = GetComponent<GameView>();
             if (_view == null) _view = gameObject.AddComponent<GameView>();
-            _view.Build(_settings, OnColumnClicked, Retry, ShareStub, GetChallengeDisplayData, GetTimeUntilReset, ClaimReward);
+            _view.Build(
+                _settings, 
+                OnColumnClicked, 
+                Retry, 
+                GoToMainMenuFromGameOver, 
+                GetChallengeDisplayData, 
+                GetTimeUntilReset, 
+                ClaimReward,
+                () => _save,
+                OnPlayerNameChangedFromMainMenu,
+                OnMainMenuPlayGame,
+                OnMainMenuPlayTutorial,
+                OnMainMenuToggleLeaderboard
+            );
 
             _tutorialController = new TutorialController(this);
             _view.OnReplayTutorialTriggered = StartTutorial;
@@ -211,6 +229,9 @@ namespace StackSurge
 
         void BeginRun()
         {
+            _view.SetTutorialActive(false); // Re-enable all buttons (covers tutorial->game and menu->game)
+            _view.HideMainMenu();
+            if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
             _board = new GameBoard(_settings.Columns, _settings.Rows);
             _score = new ScoreService();
             _score.Reset(_settings.ComboWindowSeconds);
@@ -511,8 +532,51 @@ namespace StackSurge
 
         void OnLoadingScreenFinished()
         {
+            _playing = false;
+            if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
+            _view.ShowMainMenu(false);
+        }
+
+        public void GoToMainMenuFromGameOver()
+        {
+            _playing = false;
+            _view.HideGameOver();
+            if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
+            _view.ShowMainMenu(true);
+        }
+
+        async void OnPlayerNameChangedFromMainMenu(string newName)
+        {
+            string name = newName.Trim();
+            if (name.Length < 1 || name.Length > 20) return;
+            _save.PlayerDisplayName = name;
+            LocalProgress.Save(_save);
+            
+            _leaderboardManager.SetLeaderboardCallbacks(
+                () => _leaderboardService.GetTopScoresAsync(),
+                async n =>
+                {
+                    _save.PlayerDisplayName = n;
+                    LocalProgress.Save(_save);
+                    await _leaderboardService.SetPlayerNameAsync(n);
+                    _view.RefreshMainMenuStats();
+                },
+                () => _save.PlayerDisplayName
+            );
+
+            if (_leaderboardService != null)
+            {
+                await _leaderboardService.SetPlayerNameAsync(name);
+            }
+            
+            _view.RefreshMainMenuStats();
+        }
+
+        void OnMainMenuPlayGame()
+        {
             if (!_save.TutorialCompleted)
             {
+                _view.HideMainMenu();
                 _view.ShowTutorialChoiceDialog(
                     "Welcome to Stack Surge!",
                     "Would you like to play the interactive tutorial to learn the basics?",
@@ -532,6 +596,16 @@ namespace StackSurge
             {
                 BeginRun();
             }
+        }
+
+        void OnMainMenuPlayTutorial()
+        {
+            StartTutorial();
+        }
+
+        void OnMainMenuToggleLeaderboard()
+        {
+            _leaderboardManager.ToggleLeaderboard();
         }
     }
 }

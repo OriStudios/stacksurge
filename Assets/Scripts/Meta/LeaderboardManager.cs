@@ -112,6 +112,14 @@ namespace StackSurge.Meta
             }
         }
 
+        public void HideLeaderboard()
+        {
+            if (_leaderboardRoot != null)
+            {
+                _leaderboardRoot.SetActive(false);
+            }
+        }
+
         // --- UI INTERACTION ---
         public void ToggleLeaderboard()
         {
