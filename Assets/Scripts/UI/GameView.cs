@@ -298,7 +298,10 @@ namespace StackSurge.UI
                 _mainMenuSaveNameButton.onClick.AddListener(() =>
                 {
                     if (_mainMenuNameInput != null)
+                    {
                         _onPlayerNameChanged?.Invoke(_mainMenuNameInput.text);
+                        _mainMenuNameInput.text = "";
+                    }
                 });
             }
             else Debug.LogWarning("[GameView] _mainMenuSaveNameButton not assigned.");
@@ -307,7 +310,11 @@ namespace StackSurge.UI
             if (_mainMenuNameInput != null)
             {
                 _mainMenuNameInput.onSubmit.RemoveAllListeners();
-                _mainMenuNameInput.onSubmit.AddListener(val => _onPlayerNameChanged?.Invoke(val));
+                _mainMenuNameInput.onSubmit.AddListener(val =>
+                {
+                    _onPlayerNameChanged?.Invoke(val);
+                    _mainMenuNameInput.text = "";   
+                });
             }
         }
 
@@ -893,10 +900,10 @@ namespace StackSurge.UI
             Color accent = style switch
             {
                 RewardToastStyle.PerfectClear => new Color(1f, 0.84f, 0f),      // gold
-                RewardToastStyle.RowClear     => new Color(0.4f, 0.9f, 1f),     // cyan
-                RewardToastStyle.Combo        => new Color(1f, 0.45f, 0.15f),   // orange
-                RewardToastStyle.Carry        => new Color(0.6f, 0.9f, 0.4f),   // green
-                _                             => Color.white
+                RewardToastStyle.RowClear => new Color(0.4f, 0.9f, 1f),     // cyan
+                RewardToastStyle.Combo => new Color(1f, 0.45f, 0.15f),   // orange
+                RewardToastStyle.Carry => new Color(0.6f, 0.9f, 0.4f),   // green
+                _ => Color.white
             };
 
             // ── Container ─────────────────────────────────────────────────────
@@ -905,7 +912,7 @@ namespace StackSurge.UI
             var rt = go.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0.6f);
             rt.anchorMax = new Vector2(0.5f, 0.6f);
-            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(400f, 80f);
             rt.anchoredPosition = new Vector2(0f, existingCount * 90f);
 
@@ -915,7 +922,7 @@ namespace StackSurge.UI
             var txt = textGo.AddComponent<TextMeshProUGUI>();
             txt.text = label;
             txt.fontSize = style == RewardToastStyle.PerfectClear ? 52 :
-                           style == RewardToastStyle.Combo        ? 58 : 46;
+                           style == RewardToastStyle.Combo ? 58 : 46;
             txt.fontStyle = FontStyles.Bold;
             txt.color = accent;
             txt.alignment = TextAlignmentOptions.Center;
@@ -996,7 +1003,7 @@ namespace StackSurge.UI
             var rt = go.AddComponent<RectTransform>();
             rt.anchorMin = new Vector2(0.5f, 0.88f);
             rt.anchorMax = new Vector2(0.5f, 0.88f);
-            rt.pivot     = new Vector2(0.5f, 0.5f);
+            rt.pivot = new Vector2(0.5f, 0.5f);
             rt.sizeDelta = new Vector2(320f, 52f);
 
             // Background pill
