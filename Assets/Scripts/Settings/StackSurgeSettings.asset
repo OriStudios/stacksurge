@@ -13,7 +13,7 @@ MonoBehaviour:
   m_Name: StackSurgeSettings
   m_EditorClassIdentifier: Assembly-CSharp::StackSurge.Settings.StackSurgeSettings
   Columns: 7
-  Rows: 9
+  Rows: 10
   BombChance: 0.05
   ComboWindowSeconds: 3
   SlowFillBuffSeconds: 12

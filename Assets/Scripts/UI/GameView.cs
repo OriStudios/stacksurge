@@ -21,6 +21,7 @@ namespace StackSurge.UI
         RectTransform _gridRoot;
         [SerializeField] TextMeshProUGUI _scoreText;
         [SerializeField] TextMeshProUGUI _hudText;
+        [SerializeField] GameObject _instructionalText;
 
         // Visual Previews
         [SerializeField] Image _nextPreviewImg;
@@ -29,8 +30,8 @@ namespace StackSurge.UI
         [SerializeField] TextMeshProUGUI _queuedInnerLabel;
 
         // Column buttons
-        [SerializeField] ColumnButtonView _columnButtonPrefab;
-        [SerializeField] Transform _columnButtonsRoot;
+        //[SerializeField] ColumnButtonView _columnButtonPrefab;
+        //[SerializeField] Transform _columnButtonsRoot;
 
         [SerializeField] GameObject _helpPanel;
         [SerializeField] Button _closeHelpButton;
@@ -342,6 +343,31 @@ namespace StackSurge.UI
             if (_mainMenuVibrationToggle != null) _mainMenuVibrationToggle.interactable = canInteract;
             if (_mainMenuSaveNameButton != null) _mainMenuSaveNameButton.interactable = canInteract;
         }
+
+        public void SetInstructionalTextActive(bool active)
+        {
+            if (_instructionalText == null) return;
+
+            if (active)
+            {
+                var cg = _instructionalText.GetComponent<CanvasGroup>();
+                if (cg != null) cg.alpha = 1f;
+                _instructionalText.SetActive(true);
+            }
+            else
+            {
+                var cg = _instructionalText.GetComponent<CanvasGroup>();
+                if (cg != null)
+                {
+                    cg.DOKill();
+                    cg.DOFade(0f, 0.4f).SetUpdate(true).OnComplete(() => _instructionalText.SetActive(false));
+                }
+                else
+                {
+                    _instructionalText.SetActive(false);
+                }
+            }
+        }
         // ────────────────────────────────────────────────────────────────────
 
         public void UpdateHud(int score, string timeStr, string riseLine, float wildChance, TileKind current, TileKind next)
@@ -351,6 +377,8 @@ namespace StackSurge.UI
             if (score != _lastScore)
             {
                 _scoreText.text = score.ToString();
+                _scoreText.transform.DOKill();
+                _scoreText.transform.localScale = Vector3.one;
                 _scoreText.transform.DOPunchScale(Vector3.one * 0.15f, 0.3f, 10, 1f);
                 _lastScore = score;
             }
@@ -1231,6 +1259,7 @@ namespace StackSurge.UI
                 _colOverlayBtns[c] = btn;   // store so tutorial can lock it
             }
 
+            /*
             _colButtonGos = new GameObject[_settings.Columns];
             for (int c = 0; c < _settings.Columns; c++)
             {
@@ -1241,7 +1270,7 @@ namespace StackSurge.UI
                 _colButtonGos[c] = btnGo;
                 view.Button.onClick.AddListener(() => _onColumnClicked?.Invoke(col));
                 view.Label.text = (c + 1).ToString();
-            }
+            } */
 
             if (_gameOverRoot != null)
             {

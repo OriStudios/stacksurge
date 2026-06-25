@@ -7,7 +7,7 @@ public class BuildWindow : EditorWindow
     private bool _bumpMajor;
     private bool _bumpMinor;
     private bool _bumpPatch;
-    private bool _targetAAB  = true;   // true = Release AAB, false = Debug APK
+    private bool _targetAAB = true;   // true = Release AAB, false = Debug APK
     private bool _targetSet;           // whether the user has picked a target yet
 
     // ── Styles (lazy-init) ─────────────────────────────────────────────────
@@ -26,16 +26,16 @@ public class BuildWindow : EditorWindow
     private GUIStyle _stylePreviewRow;
     private GUIStyle _styleBuildButton;
     private GUIStyle _styleBuildButtonDisabled;
-    private bool     _stylesInitialised;
+    private bool _stylesInitialised;
 
     // ── Colors ─────────────────────────────────────────────────────────────
-    private static readonly Color ColBackground  = new Color(0.12f, 0.12f, 0.12f);
-    private static readonly Color ColCard        = new Color(0.18f, 0.18f, 0.18f);
-    private static readonly Color ColCardActive  = new Color(0.24f, 0.24f, 0.24f);
-    private static readonly Color ColBorder      = new Color(0.30f, 0.30f, 0.30f);
-    private static readonly Color ColText        = new Color(0.90f, 0.90f, 0.90f);
-    private static readonly Color ColMuted       = new Color(0.50f, 0.50f, 0.50f);
-    private static readonly Color ColAccent      = new Color(0.95f, 0.95f, 0.95f);
+    private static readonly Color ColBackground = new Color(0.12f, 0.12f, 0.12f);
+    private static readonly Color ColCard = new Color(0.18f, 0.18f, 0.18f);
+    private static readonly Color ColCardActive = new Color(0.24f, 0.24f, 0.24f);
+    private static readonly Color ColBorder = new Color(0.30f, 0.30f, 0.30f);
+    private static readonly Color ColText = new Color(0.90f, 0.90f, 0.90f);
+    private static readonly Color ColMuted = new Color(0.50f, 0.50f, 0.50f);
+    private static readonly Color ColAccent = new Color(0.95f, 0.95f, 0.95f);
     private static readonly Color ColBuildButton = new Color(0.22f, 0.22f, 0.22f);
 
     // ── Open ───────────────────────────────────────────────────────────────
@@ -56,7 +56,7 @@ public class BuildWindow : EditorWindow
         EditorGUI.DrawRect(new Rect(0, 0, position.width, position.height), ColBackground);
 
         float pad = 16f;
-        float w   = position.width - pad * 2;
+        float w = position.width - pad * 2;
 
         GUILayout.Space(pad);
         GUILayout.BeginHorizontal();
@@ -85,22 +85,22 @@ public class BuildWindow : EditorWindow
     private void DrawVersionRow(float w)
     {
         float half = (w - 8) / 2f;
-        float h    = 80f;
+        float h = 80f;
 
         GUILayout.BeginHorizontal();
 
         // Version card
         Rect vr = GUILayoutUtility.GetRect(half, h, GUILayout.Width(half), GUILayout.Height(h));
         DrawRoundedCard(vr, ColCard, ColBorder);
-        GUI.Label(new Rect(vr.x, vr.y + 12, vr.width, 20), "version",                              _styleVersionLabel);
-        GUI.Label(new Rect(vr.x, vr.y + 30, vr.width, 36), PlayerSettings.bundleVersion,           _styleVersionNumber);
+        GUI.Label(new Rect(vr.x, vr.y + 12, vr.width, 20), "version", _styleVersionLabel);
+        GUI.Label(new Rect(vr.x, vr.y + 30, vr.width, 36), PlayerSettings.bundleVersion, _styleVersionNumber);
 
         GUILayout.Space(8);
 
         // Bundle code card
         Rect br = GUILayoutUtility.GetRect(half, h, GUILayout.Width(half), GUILayout.Height(h));
         DrawRoundedCard(br, ColCard, ColBorder);
-        GUI.Label(new Rect(br.x, br.y + 12, br.width, 20), "bundle code",                          _styleVersionLabel);
+        GUI.Label(new Rect(br.x, br.y + 12, br.width, 20), "bundle code", _styleVersionLabel);
         GUI.Label(new Rect(br.x, br.y + 30, br.width, 36), PlayerSettings.Android.bundleVersionCode.ToString(), _styleVersionNumber);
 
         GUILayout.EndHorizontal();
@@ -126,15 +126,15 @@ public class BuildWindow : EditorWindow
 
     private bool DrawBumpChip(float w, string label, string sub, bool active)
     {
-        GUIStyle titleStyle = active ? _styleBumpActive    : _styleBumpInactive;
-        GUIStyle subStyle   = active ? _styleBumpSubActive : _styleBumpSubInactive;
+        GUIStyle titleStyle = active ? _styleBumpActive : _styleBumpInactive;
+        GUIStyle subStyle = active ? _styleBumpSubActive : _styleBumpSubInactive;
 
         Rect r = GUILayoutUtility.GetRect(w, 62, GUILayout.Width(w), GUILayout.Height(62));
         DrawRoundedCard(r, active ? ColCardActive : ColCard, active ? ColAccent : ColBorder);
 
         float innerY = r.y + 12;
-        GUI.Label(new Rect(r.x, innerY,      r.width, 24), label, titleStyle);
-        GUI.Label(new Rect(r.x, innerY + 22, r.width, 18), sub,   subStyle);
+        GUI.Label(new Rect(r.x, innerY, r.width, 24), label, titleStyle);
+        GUI.Label(new Rect(r.x, innerY + 22, r.width, 18), sub, subStyle);
 
         if (GUI.Button(r, GUIContent.none, GUIStyle.none))
             return !active;
@@ -175,12 +175,12 @@ public class BuildWindow : EditorWindow
         Rect r = GUILayoutUtility.GetRect(w, 72, GUILayout.Width(w), GUILayout.Height(72));
         DrawRoundedCard(r, active ? ColCardActive : ColCard, active ? ColAccent : ColBorder);
 
-        GUIStyle titleStyle = active ? _styleTargetActive   : _styleTargetInactive;
-        GUIStyle subStyle   = _styleTargetSub;
+        GUIStyle titleStyle = active ? _styleTargetActive : _styleTargetInactive;
+        GUIStyle subStyle = _styleTargetSub;
 
         float innerY = r.y + 14;
-        GUI.Label(new Rect(r.x, innerY,      r.width, 26), title, titleStyle);
-        GUI.Label(new Rect(r.x, innerY + 24, r.width, 18), sub,   subStyle);
+        GUI.Label(new Rect(r.x, innerY, r.width, 26), title, titleStyle);
+        GUI.Label(new Rect(r.x, innerY + 24, r.width, 18), sub, subStyle);
 
         if (GUI.Button(r, GUIContent.none, GUIStyle.none))
             return true;
@@ -190,7 +190,7 @@ public class BuildWindow : EditorWindow
     // ── Preview row ────────────────────────────────────────────────────────
     private void DrawPreviewRow(float w)
     {
-        bool anyBump   = ActiveBump() != BuildScript.VersionBump.None;
+        bool anyBump = ActiveBump() != BuildScript.VersionBump.None;
         bool hasTarget = _targetSet;
 
         string previewText;
@@ -202,10 +202,10 @@ public class BuildWindow : EditorWindow
             previewText = "→  Select a build target";
         else
         {
-            string newVer  = BuildScript.BumpVersion(PlayerSettings.bundleVersion, ActiveBump());
-            int    newCode = PlayerSettings.Android.bundleVersionCode + 1;
-            string ext     = _targetAAB ? ".aab" : ".apk";
-            previewText    = $"→  StackSurge_{newVer}{ext}   ·   code {newCode}";
+            string newVer = BuildScript.BumpVersion(PlayerSettings.bundleVersion, ActiveBump());
+            int newCode = PlayerSettings.Android.bundleVersionCode + 1;
+            string ext = _targetAAB ? ".aab" : ".apk";
+            previewText = $"→  StackSurge_{newVer}{ext}   ·   code {newCode}";
         }
 
         Rect r = GUILayoutUtility.GetRect(w, 44, GUILayout.Width(w), GUILayout.Height(44));
@@ -226,9 +226,13 @@ public class BuildWindow : EditorWindow
 
         if (ready && GUI.Button(r, GUIContent.none, GUIStyle.none))
         {
-            BuildScript.Build(_targetAAB, ActiveBump());
-            // Repaint so version numbers update immediately after build
-            Repaint();
+            bool aab = _targetAAB;
+            var bump = ActiveBump();
+            EditorApplication.delayCall += () =>
+            {
+                BuildScript.Build(aab, bump);
+                if (this != null) Repaint();
+            };
         }
     }
 
@@ -258,29 +262,29 @@ public class BuildWindow : EditorWindow
 
         _styleVersionLabel = new GUIStyle(EditorStyles.label)
         {
-            fontSize  = 11,
+            fontSize = 11,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColMuted },
+            normal = { textColor = ColMuted },
         };
 
         _styleVersionNumber = new GUIStyle(EditorStyles.boldLabel)
         {
-            fontSize  = 28,
+            fontSize = 28,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColText },
+            normal = { textColor = ColText },
         };
 
         _styleSectionLabel = new GUIStyle(EditorStyles.label)
         {
             fontSize = 11,
-            normal   = { textColor = ColMuted },
+            normal = { textColor = ColMuted },
         };
 
         _styleBumpActive = new GUIStyle(EditorStyles.boldLabel)
         {
-            fontSize  = 14,
+            fontSize = 14,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColAccent },
+            normal = { textColor = ColAccent },
         };
         _styleBumpInactive = new GUIStyle(_styleBumpActive)
         {
@@ -289,17 +293,17 @@ public class BuildWindow : EditorWindow
 
         _styleBumpSubActive = new GUIStyle(EditorStyles.label)
         {
-            fontSize  = 11,
+            fontSize = 11,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColMuted },
+            normal = { textColor = ColMuted },
         };
         _styleBumpSubInactive = new GUIStyle(_styleBumpSubActive);
 
         _styleTargetActive = new GUIStyle(EditorStyles.boldLabel)
         {
-            fontSize  = 14,
+            fontSize = 14,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColAccent },
+            normal = { textColor = ColAccent },
         };
         _styleTargetInactive = new GUIStyle(_styleTargetActive)
         {
@@ -308,24 +312,24 @@ public class BuildWindow : EditorWindow
 
         _styleTargetSub = new GUIStyle(EditorStyles.label)
         {
-            fontSize  = 11,
+            fontSize = 11,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColMuted },
+            normal = { textColor = ColMuted },
         };
 
         _stylePreviewRow = new GUIStyle(EditorStyles.label)
         {
-            fontSize  = 11,
+            fontSize = 11,
             alignment = TextAnchor.MiddleLeft,
-            padding   = new RectOffset(14, 14, 0, 0),
-            normal    = { textColor = ColMuted },
+            padding = new RectOffset(14, 14, 0, 0),
+            normal = { textColor = ColMuted },
         };
 
         _styleBuildButton = new GUIStyle(EditorStyles.boldLabel)
         {
-            fontSize  = 15,
+            fontSize = 15,
             alignment = TextAnchor.MiddleCenter,
-            normal    = { textColor = ColText },
+            normal = { textColor = ColText },
         };
         _styleBuildButtonDisabled = new GUIStyle(_styleBuildButton)
         {

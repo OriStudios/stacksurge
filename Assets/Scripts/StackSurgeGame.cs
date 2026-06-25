@@ -36,6 +36,7 @@ namespace StackSurge
         float _slowFillBuff;
         bool _playing;
         bool _resolvingMatches;
+        int _tilesPlacedThisRun;
 
         [SerializeField] float _blinkTime = 0.25f;
 
@@ -108,6 +109,7 @@ namespace StackSurge
             _view.HideGameOver();
             if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
             _view.SetTutorialActive(true); // Lock all non-tutorial buttons
+            _view.SetInstructionalTextActive(false);
             _tutorialCoroutine = StartCoroutine(_tutorialController.PlayTutorialCoroutine());
         }
 
@@ -253,6 +255,16 @@ namespace StackSurge
             _resolvingMatches = false;
             _current = RollIncomingTile();
             _next = RollIncomingTile();
+
+            _tilesPlacedThisRun = 0;
+            if (PlayerPrefs.GetInt("InstructionalTextDismissed", 0) == 0)
+            {
+                _view.SetInstructionalTextActive(true);
+            }
+            else
+            {
+                _view.SetInstructionalTextActive(false);
+            }
             
             _view.HideGameOver();
             _view.RefreshGrid(_board.Cells);
@@ -290,6 +302,17 @@ namespace StackSurge
 
                 EndRun();
                 return;
+            }
+
+            if (!_inTutorial && PlayerPrefs.GetInt("InstructionalTextDismissed", 0) == 0)
+            {
+                _tilesPlacedThisRun++;
+                if (_tilesPlacedThisRun >= 5)
+                {
+                    PlayerPrefs.SetInt("InstructionalTextDismissed", 1);
+                    PlayerPrefs.Save();
+                    _view.SetInstructionalTextActive(false);
+                }
             }
 
             var placed = _current;
@@ -561,6 +584,7 @@ namespace StackSurge
         {
             _playing = false;
             _view.HideGameOver();
+            _view.SetInstructionalTextActive(false);
             if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
             _view.ShowMainMenu(true);
         }
