@@ -26,8 +26,10 @@ namespace StackSurge.UI
         // Visual Previews
         [SerializeField] Image _nextPreviewImg;
         [SerializeField] Image _queuedPreviewImg;
-        [SerializeField] TextMeshProUGUI _nextInnerLabel;
-        [SerializeField] TextMeshProUGUI _queuedInnerLabel;
+        [SerializeField] Image _nextInnerIcon;
+        [SerializeField] Image _queuedInnerIcon;
+        [SerializeField] Sprite _bombSprite;
+        [SerializeField] Sprite _wildSprite;
 
         // Column buttons
         //[SerializeField] ColumnButtonView _columnButtonPrefab;
@@ -69,7 +71,9 @@ namespace StackSurge.UI
         [SerializeField] Toggle _mainMenuVibrationToggle;    // placed wherever suits the UI
 
         [Header("Main Menu – Stats Card")]
-        [SerializeField] TextMeshProUGUI _mainMenuHighScoreText;
+        [SerializeField] TextMeshProUGUI _mainMenuAllTimeHighText;
+        [SerializeField] TextMeshProUGUI _mainMenuDailyBestText;
+        [SerializeField] TextMeshProUGUI _mainMenuStreakText;
         [SerializeField] TextMeshProUGUI _mainMenuPlayerNameText;
         [SerializeField] TMP_InputField _mainMenuNameInput;
         [SerializeField] Button _mainMenuSaveNameButton;
@@ -108,7 +112,6 @@ namespace StackSurge.UI
         private TextMeshProUGUI _tutorialBodyText;
         private Button _tutorialNextBtn;
         private bool _tutorialNextClicked;
-        private GameObject[] _colButtonGos;
         private Button[] _colOverlayBtns;   // full-height transparent click zones
 
         public Action OnReplayTutorialTriggered;
@@ -314,7 +317,7 @@ namespace StackSurge.UI
                 _mainMenuNameInput.onSubmit.AddListener(val =>
                 {
                     _onPlayerNameChanged?.Invoke(val);
-                    _mainMenuNameInput.text = "";   
+                    _mainMenuNameInput.text = "";
                 });
             }
         }
@@ -387,33 +390,36 @@ namespace StackSurge.UI
                 $"Time: <color=#A0A0A0>{timeStr}</color>\n" +
                 $"<color=#60A5FA>{riseLine}</color>";
 
-            UpdatePreviewSquare(_nextPreviewImg, _nextInnerLabel, current);
-            UpdatePreviewSquare(_queuedPreviewImg, _queuedInnerLabel, next);
+            UpdatePreviewSquare(_nextPreviewImg, _nextInnerIcon, current);
+            UpdatePreviewSquare(_queuedPreviewImg, _queuedInnerIcon, next);
         }
 
-        private void UpdatePreviewSquare(Image img, TextMeshProUGUI label, TileKind k)
+        private void UpdatePreviewSquare(Image img, Image innerIcon, TileKind k)
         {
-            if (img == null || label == null) return;
+            if (img == null || innerIcon == null) return;
 
             img.color = ColorFor(k);
 
             if (k == TileKind.Wild)
             {
-                label.text = "WILD";
-                label.color = Color.black;
+                innerIcon.sprite = _wildSprite;
+                //innerIcon.color = new Color(0.36f, 0.2f, 0.55f); // deep violet, reads clearly on white
+                innerIcon.color = new Color(0.0f, 0.0f, 0.0f);
+                innerIcon.enabled = true;
                 img.transform.DOKill();
                 img.transform.DOScale(1.1f, 0.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine);
             }
             else if (k == TileKind.Bomb)
             {
-                label.text = "BOMB";
-                label.color = Color.white;
+                innerIcon.sprite = _bombSprite;
+                innerIcon.color = Color.white;
+                innerIcon.enabled = true;
                 img.transform.DOKill();
                 img.transform.localScale = Vector3.one;
             }
             else
             {
-                label.text = "";
+                innerIcon.enabled = false;
                 img.transform.DOKill();
                 img.transform.localScale = Vector3.one;
             }
@@ -426,7 +432,7 @@ namespace StackSurge.UI
             _gameOverScore.text = $"Score: <size=120%>{score}</size>\n\n" +
                                   $"Daily Best: {dailyBest}\n" +
                                   $"All-time: {allTimeHigh}\n" +
-                                  $"Streak: {streak} days";
+                                  $"Streak: {streak} {(streak == 1 ? "day" : "days")}";
 
             _gameOverRoot.SetActive(true);
             var cg = _gameOverRoot.GetComponent<CanvasGroup>();
@@ -499,11 +505,14 @@ namespace StackSurge.UI
             var save = _getSaveData();
             if (save == null) return;
 
-            if (_mainMenuHighScoreText != null)
-            {
-                _mainMenuHighScoreText.text =
-                    $"ALL-TIME HIGH: <color=#FFFFFF><b>{save.AllTimeHigh}</b></color>   ·   DAILY BEST: <color=#FFFFFF><b>{save.DailyBest}</b></color>\nSTREAK: <color=#FFFFFF><b>{save.Streak} days</b></color>";
-            }
+            if (_mainMenuAllTimeHighText != null)
+                _mainMenuAllTimeHighText.text = save.AllTimeHigh.ToString();
+
+            if (_mainMenuDailyBestText != null)
+                _mainMenuDailyBestText.text = save.DailyBest.ToString();
+
+            if (_mainMenuStreakText != null)
+                _mainMenuStreakText.text = $"{save.Streak} {(save.Streak == 1 ? "Day" : "Days")}";
 
             /*
             if (_mainMenuNameInput != null)
@@ -1420,15 +1429,17 @@ namespace StackSurge.UI
         public void EnableStartButton()
         {
             if (_loadingRoot == null) return;
-            var startBtn = _loadingRoot.GetComponent<Button>();
+
+            // Auto-dismiss after a brief pause so the player can see the status
             if (_loadingStatusText != null)
             {
                 _loadingStatusText.transform.DOKill();
-                _loadingStatusText.text = "TAP TO START";
-                _loadingStatusText.color = new Color(0.4f, 0.8f, 1.0f, 0.8f);
-                _loadingStatusText.transform.DOScale(1.1f, 0.8f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                _loadingStatusText.transform.localScale = Vector3.one;
             }
-            if (startBtn != null) startBtn.interactable = true;
+
+            // Automatically proceed to the main menu — no tap required
+            Time.timeScale = 1f;
+            HideLoadingScreen(1.0f);
         }
 
         private void BuildLoadingScreen(Transform parent)
@@ -1515,7 +1526,7 @@ namespace StackSurge.UI
                 rt.anchorMax = new Vector2(0.5f, 1f);
                 rt.pivot = new Vector2(0.5f, 1f);
                 rt.anchoredPosition = new Vector2(0f, -140f);
-                rt.sizeDelta = new Vector2(660f, 260f);
+                rt.sizeDelta = new Vector2(680f, 320f);
 
                 _tutorialDialogGo.AddComponent<Image>().color = new Color(0.06f, 0.06f, 0.08f, 0.98f);
 
@@ -1530,9 +1541,9 @@ namespace StackSurge.UI
                 titleRt.anchorMax = new Vector2(1f, 1f);
                 titleRt.pivot = new Vector2(0.5f, 1f);
                 titleRt.anchoredPosition = new Vector2(0f, -15f);
-                titleRt.sizeDelta = new Vector2(-40f, 45f);
+                titleRt.sizeDelta = new Vector2(-40f, 55f);
                 _tutorialTitleText = titleGo.AddComponent<TextMeshProUGUI>();
-                _tutorialTitleText.fontSize = 28;
+                _tutorialTitleText.fontSize = 36;
                 _tutorialTitleText.fontStyle = FontStyles.Bold;
                 _tutorialTitleText.color = new Color(0.2f, 0.6f, 1.0f);
                 _tutorialTitleText.alignment = TextAlignmentOptions.Left;
@@ -1543,10 +1554,10 @@ namespace StackSurge.UI
                 bodyRt.anchorMin = new Vector2(0f, 1f);
                 bodyRt.anchorMax = new Vector2(1f, 1f);
                 bodyRt.pivot = new Vector2(0.5f, 1f);
-                bodyRt.anchoredPosition = new Vector2(0f, -65f);
-                bodyRt.sizeDelta = new Vector2(-40f, 110f);
+                bodyRt.anchoredPosition = new Vector2(0f, -80f);
+                bodyRt.sizeDelta = new Vector2(-40f, 150f);
                 _tutorialBodyText = bodyGo.AddComponent<TextMeshProUGUI>();
-                _tutorialBodyText.fontSize = 20;
+                _tutorialBodyText.fontSize = 25;
                 _tutorialBodyText.color = new Color(0.9f, 0.9f, 0.95f);
                 _tutorialBodyText.alignment = TextAlignmentOptions.Left;
                 _tutorialBodyText.overflowMode = TextOverflowModes.Ellipsis;
@@ -1558,7 +1569,7 @@ namespace StackSurge.UI
                 btnRt.anchorMax = new Vector2(1f, 0f);
                 btnRt.pivot = new Vector2(1f, 0f);
                 btnRt.anchoredPosition = new Vector2(-20f, 20f);
-                btnRt.sizeDelta = new Vector2(160f, 50f);
+                btnRt.sizeDelta = new Vector2(180f, 60f);
                 btnGo.AddComponent<Image>().color = new Color(0.2f, 0.6f, 1.0f, 1.0f);
                 _tutorialNextBtn = btnGo.AddComponent<Button>();
                 _tutorialNextBtn.onClick.AddListener(() => _tutorialNextClicked = true);
@@ -1571,7 +1582,7 @@ namespace StackSurge.UI
                 btnTxtRt.sizeDelta = Vector2.zero;
                 var btnTxt = btnTxtGo.AddComponent<TextMeshProUGUI>();
                 btnTxt.text = "NEXT";
-                btnTxt.fontSize = 22;
+                btnTxt.fontSize = 26;
                 btnTxt.fontStyle = FontStyles.Bold;
                 btnTxt.color = Color.white;
                 btnTxt.alignment = TextAlignmentOptions.Center;
@@ -1584,7 +1595,7 @@ namespace StackSurge.UI
             _tutorialNextBtn.gameObject.SetActive(showNextButton);
 
             var bRt = _tutorialBodyText.GetComponent<RectTransform>();
-            bRt.sizeDelta = showNextButton ? new Vector2(-40f, 110f) : new Vector2(-40f, 170f);
+            bRt.sizeDelta = showNextButton ? new Vector2(-40f, 150f) : new Vector2(-40f, 220f);
 
             _tutorialDialogGo.transform.localScale = new Vector3(0.9f, 0.9f, 1f);
             _tutorialDialogGo.transform.DOScale(1f, 0.3f).SetEase(Ease.OutBack).SetUpdate(true);
@@ -1600,8 +1611,8 @@ namespace StackSurge.UI
             rtPlay.anchorMin = new Vector2(0.5f, 0f);
             rtPlay.anchorMax = new Vector2(0.5f, 0f);
             rtPlay.pivot = new Vector2(1f, 0f);
-            rtPlay.anchoredPosition = new Vector2(-15f, 20f);
-            rtPlay.sizeDelta = new Vector2(200f, 50f);
+            rtPlay.anchoredPosition = new Vector2(-20f, 20f);
+            rtPlay.sizeDelta = new Vector2(240f, 60f);
             playBtnGo.AddComponent<Image>().color = new Color(0.2f, 0.6f, 1.0f, 1.0f);
             var btnPlay = playBtnGo.AddComponent<Button>();
             btnPlay.onClick.AddListener(() =>
@@ -1619,7 +1630,7 @@ namespace StackSurge.UI
             txtPlayRt.sizeDelta = Vector2.zero;
             var txtPlay = txtPlayGo.AddComponent<TextMeshProUGUI>();
             txtPlay.text = "TUTORIAL";
-            txtPlay.fontSize = 20;
+            txtPlay.fontSize = 24;
             txtPlay.fontStyle = FontStyles.Bold;
             txtPlay.color = Color.white;
             txtPlay.alignment = TextAlignmentOptions.Center;
@@ -1630,8 +1641,8 @@ namespace StackSurge.UI
             rtSkip.anchorMin = new Vector2(0.5f, 0f);
             rtSkip.anchorMax = new Vector2(0.5f, 0f);
             rtSkip.pivot = new Vector2(0f, 0f);
-            rtSkip.anchoredPosition = new Vector2(15f, 20f);
-            rtSkip.sizeDelta = new Vector2(200f, 50f);
+            rtSkip.anchoredPosition = new Vector2(20f, 20f);
+            rtSkip.sizeDelta = new Vector2(240f, 60f);
             skipBtnGo.AddComponent<Image>().color = new Color(0.25f, 0.25f, 0.28f, 1.0f);
             var btnSkip = skipBtnGo.AddComponent<Button>();
             btnSkip.onClick.AddListener(() =>
@@ -1650,7 +1661,7 @@ namespace StackSurge.UI
             txtSkipRt.sizeDelta = Vector2.zero;
             var txtSkip = txtSkipGo.AddComponent<TextMeshProUGUI>();
             txtSkip.text = "SKIP";
-            txtSkip.fontSize = 20;
+            txtSkip.fontSize = 24;
             txtSkip.fontStyle = FontStyles.Bold;
             txtSkip.color = Color.white;
             txtSkip.alignment = TextAlignmentOptions.Center;
@@ -1663,43 +1674,53 @@ namespace StackSurge.UI
 
         public void HighlightColumn(int colIndex)
         {
-            if (_colButtonGos == null) return;
+            if (_colOverlayBtns == null) return;
 
-            for (int c = 0; c < _colButtonGos.Length; c++)
+            float cellH = 920f / _settings.Rows;
+            float halfHeight = (_settings.Rows * cellH) * 0.5f;
+
+            for (int c = 0; c < _colOverlayBtns.Length; c++)
             {
-                var btnGo = _colButtonGos[c];
-                if (btnGo == null) continue;
-
-                var btn = btnGo.GetComponent<Button>();
+                var btn = _colOverlayBtns[c];
+                if (btn == null) continue;
+                var btnGo = btn.gameObject;
 
                 if (c == colIndex)
                 {
                     var img = btnGo.GetComponent<Image>();
-                    if (img != null) img.color = new Color(1f, 1f, 1f, 0.1f);
+                    if (img != null) img.color = new Color(1f, 1f, 1f, 0.05f);
                     if (btn != null) btn.interactable = true;
 
-                    var overlayGo = new GameObject("TutorialHighlightOverlay");
-                    overlayGo.transform.SetParent(btnGo.transform, false);
-                    var ort = overlayGo.AddComponent<RectTransform>();
-                    ort.anchorMin = Vector2.zero;
-                    ort.anchorMax = Vector2.one;
-                    ort.sizeDelta = Vector2.zero;
-                    var oimg = overlayGo.AddComponent<Image>();
-                    oimg.color = new Color(0.95f, 0.75f, 0.2f, 0.2f);
-                    overlayGo.transform.DOScale(1.08f, 0.6f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                    var overlayGo = btnGo.transform.Find("TutorialHighlightOverlay")?.gameObject;
+                    if (overlayGo == null)
+                    {
+                        overlayGo = new GameObject("TutorialHighlightOverlay");
+                        overlayGo.transform.SetParent(btnGo.transform, false);
+                        var ort = overlayGo.AddComponent<RectTransform>();
+                        ort.anchorMin = Vector2.zero;
+                        ort.anchorMax = Vector2.one;
+                        ort.sizeDelta = Vector2.zero;
+                        var oimg = overlayGo.AddComponent<Image>();
+                        oimg.color = new Color(0.95f, 0.75f, 0.2f, 0.2f);
+                        overlayGo.transform.DOScale(1.08f, 0.6f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                    }
 
-                    var arrowGo = new GameObject("TutorialArrow");
-                    arrowGo.transform.SetParent(btnGo.transform, false);
-                    var art = arrowGo.AddComponent<RectTransform>();
-                    art.anchoredPosition = new Vector2(0f, 80f);
-                    art.sizeDelta = new Vector2(60f, 60f);
-                    var txt = arrowGo.AddComponent<TextMeshProUGUI>();
-                    txt.text = "▼";
-                    txt.fontSize = 44;
-                    txt.color = new Color(0.95f, 0.75f, 0.2f, 1f);
-                    txt.fontStyle = FontStyles.Bold;
-                    txt.alignment = TextAlignmentOptions.Center;
-                    art.DOAnchorPosY(100f, 0.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                    var arrowGo = btnGo.transform.Find("TutorialArrow")?.gameObject;
+                    if (arrowGo == null)
+                    {
+                        arrowGo = new GameObject("TutorialArrow");
+                        arrowGo.transform.SetParent(btnGo.transform, false);
+                        var art = arrowGo.AddComponent<RectTransform>();
+                        art.anchoredPosition = new Vector2(0f, halfHeight - 60f);
+                        art.sizeDelta = new Vector2(60f, 60f);
+                        var txt = arrowGo.AddComponent<TextMeshProUGUI>();
+                        txt.text = "▼";
+                        txt.fontSize = 44;
+                        txt.color = new Color(0.95f, 0.75f, 0.2f, 1f);
+                        txt.fontStyle = FontStyles.Bold;
+                        txt.alignment = TextAlignmentOptions.Center;
+                        art.DOAnchorPosY(halfHeight - 40f, 0.5f).SetLoops(-1, LoopType.Yoyo).SetEase(Ease.InOutSine).SetUpdate(true);
+                    }
 
                     for (int r = 0; r < _settings.Rows; r++)
                     {
@@ -1715,12 +1736,8 @@ namespace StackSurge.UI
                 else
                 {
                     var img = btnGo.GetComponent<Image>();
-                    if (img != null) img.color = new Color(1f, 1f, 1f, 0.01f);
+                    if (img != null) img.color = new Color(1f, 1f, 1f, 0f);
                     if (btn != null) btn.interactable = false;
-
-                    // Also lock the full-height transparent overlay for this column
-                    if (_colOverlayBtns != null && c < _colOverlayBtns.Length && _colOverlayBtns[c] != null)
-                        _colOverlayBtns[c].interactable = false;
 
                     for (int r = 0; r < _settings.Rows; r++)
                     {
@@ -1742,22 +1759,18 @@ namespace StackSurge.UI
 
         public void ClearColumnHighlight()
         {
-            if (_colButtonGos == null) return;
+            if (_colOverlayBtns == null) return;
 
-            for (int c = 0; c < _colButtonGos.Length; c++)
+            for (int c = 0; c < _colOverlayBtns.Length; c++)
             {
-                var btnGo = _colButtonGos[c];
-                if (btnGo == null) continue;
+                var btn = _colOverlayBtns[c];
+                if (btn == null) continue;
+                var btnGo = btn.gameObject;
 
-                var btn = btnGo.GetComponent<Button>();
                 if (btn != null) btn.interactable = true;
 
-                // Re-enable the full-height overlay for this column
-                if (_colOverlayBtns != null && c < _colOverlayBtns.Length && _colOverlayBtns[c] != null)
-                    _colOverlayBtns[c].interactable = true;
-
                 var img = btnGo.GetComponent<Image>();
-                if (img != null) img.color = new Color(1f, 1f, 1f, 0.05f);
+                if (img != null) img.color = new Color(1f, 1f, 1f, 0f);
 
                 var overlay = btnGo.transform.Find("TutorialHighlightOverlay");
                 if (overlay != null) Destroy(overlay.gameObject);

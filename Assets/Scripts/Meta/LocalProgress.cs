@@ -28,6 +28,12 @@ namespace StackSurge.Meta
 
         /// <summary>True if the user has completed or skipped the interactive tutorial.</summary>
         public bool TutorialCompleted;
+
+        /// <summary>
+        /// Score queued while offline, waiting to be submitted to the leaderboard on next connection.
+        /// -1 means no pending score.
+        /// </summary>
+        public int PendingLeaderboardScore = -1;
     }
 
     public static class LocalProgress
@@ -44,7 +50,13 @@ namespace StackSurge.Meta
                 {
                     var json = File.ReadAllText(Path);
                     var d = JsonUtility.FromJson<SaveData>(json);
-                    return d ?? new SaveData();
+                    if (d != null)
+                    {
+                        NormalizeDailyState(d);
+                        return d;
+                    }
+
+                    return new SaveData();
                 }
             }
             catch (Exception e)
@@ -53,6 +65,15 @@ namespace StackSurge.Meta
             }
 
             return new SaveData();
+        }
+
+        static void NormalizeDailyState(SaveData data)
+        {
+            var today = DateTime.Now.Date;
+            string todayStr = today.ToString("yyyy-MM-dd");
+
+            if (string.IsNullOrWhiteSpace(data.DailyDate) || data.DailyDate != todayStr)
+                data.DailyBest = 0;
         }
 
         public static void Save(SaveData data)

@@ -176,7 +176,7 @@ namespace StackSurge
             var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
             await _provider.InitializeAsync(_save, defs);
 
-            _leaderboardService = new LeaderboardService(_provider.IsOnline);
+            _leaderboardService = new LeaderboardService(_provider.IsOnline, _save);
             _leaderboardManager.SetLeaderboardCallbacks(
                 () => _leaderboardService.GetTopScoresAsync(),
                 async name =>
@@ -188,7 +188,7 @@ namespace StackSurge
                 () => _save.PlayerDisplayName
             );
 
-            _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "OFFLINE FALLBACK");
+            _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "NO INTERNET, PLAYING OFFLINE");
             _challenges = new ChallengeTracker(_provider);
 
             _view.EnableStartButton();
@@ -290,7 +290,7 @@ namespace StackSurge
             if (!_playing || _resolvingMatches) return;
 
             // If in tutorial mode, only allow dropping in the required column
-            if (_inTutorial && _tutorialRequiredColumn != -1 && col != _tutorialRequiredColumn)
+            if (_inTutorial && col != _tutorialRequiredColumn)
             {
                 return;
             }
