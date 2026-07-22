@@ -1,3 +1,4 @@
+using System.Globalization;
 using UnityEngine;
 using UnityEngine.UI;
 using TMPro;
@@ -39,7 +40,7 @@ namespace StackSurge.UI
             // Name and Score
             _nameText.text = entry.PlayerName + (isPlayer ? " <color=#FFD700><size=70%>(You)</size></color>" : "");
             _nameText.fontStyle = isPlayer ? FontStyles.Bold : FontStyles.Normal;
-            _scoreText.text = ((int)entry.Score).ToString("N0");
+            _scoreText.text = ((int)entry.Score).ToString("N0", CultureInfo.InvariantCulture);
 
             // Staggered Animation
             transform.localScale = Vector3.one * 0.88f;

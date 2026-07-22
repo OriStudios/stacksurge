@@ -341,6 +341,17 @@ RectTransform:
   m_CorrespondingSourceObject: {fileID: 7295865017427833627, guid: b9e97a9f6ff0a4ef897b368eb845fd6a, type: 3}
   m_PrefabInstance: {fileID: 2073463567}
   m_PrefabAsset: {fileID: 0}
+--- !u!114 &319838953 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 165402384631841902, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1 &325913631
 GameObject:
   m_ObjectHideFlags: 0
@@ -1295,6 +1306,17 @@ MonoBehaviour:
   ConformX: 1
   ConformY: 1
   Logging: 1
+--- !u!114 &1039622957 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 7119278482209525211, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!114 &1071502923 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2391212181031010107, guid: b9e97a9f6ff0a4ef897b368eb845fd6a, type: 3}
@@ -1753,6 +1775,10 @@ MonoBehaviour:
   _leaderboardRowContainer: {fileID: 170510807}
   _leaderboardStatusText: {fileID: 540686824}
   _playerNameInput: {fileID: 2117245047}
+  _dailyLeaderboardTabButton: {fileID: 1397544279}
+  _weeklyLeaderboardTabButton: {fileID: 319838953}
+  _allTimeLeaderboardTabButton: {fileID: 1514074027}
+  _leaderboardTitleText: {fileID: 1039622957}
   _leaderboardButton: {fileID: 64185594}
   _rowPrefab: {fileID: 6720231906533129593, guid: 39692c93e65b44886a9b67f138ff3249, type: 3}
   _goldMedal: {fileID: -1338536364, guid: 60d55fd5383ee4b0fb6e7468bf63628b, type: 3}
@@ -1859,6 +1885,17 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1397544279 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 1472592195628123035, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!1 &1444447477
 GameObject:
   m_ObjectHideFlags: 0
@@ -2013,6 +2050,17 @@ CanvasRenderer:
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 8668920635989097155, guid: b9e97a9f6ff0a4ef897b368eb845fd6a, type: 3}
   m_PrefabInstance: {fileID: 2073463567}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
+--- !u!114 &1514074027 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 8176438308684479830, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 0}
   m_Enabled: 1

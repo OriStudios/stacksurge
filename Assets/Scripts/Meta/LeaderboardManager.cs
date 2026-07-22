@@ -16,15 +16,22 @@ namespace StackSurge.Meta
         [SerializeField] private TextMeshProUGUI _leaderboardStatusText;
         [SerializeField] private TMP_InputField _playerNameInput;
 
+        [Header("Leaderboard Tabs")]
+        [SerializeField] private Button _dailyLeaderboardTabButton;
+        [SerializeField] private Button _weeklyLeaderboardTabButton;
+        [SerializeField] private Button _allTimeLeaderboardTabButton;
+        [SerializeField] private TextMeshProUGUI _leaderboardTitleText;
+
         [SerializeField] private Button _leaderboardButton;
 
         [Header("Assets")]
         [SerializeField] private LeaderboardRowView _rowPrefab;
         [SerializeField] private Sprite _goldMedal, _silverMedal, _bronzeMedal;
 
-        private Func<Task<LeaderboardEntryData[]>> _getLeaderboardScores;
+        private Func<LeaderboardScope, Task<LeaderboardEntryData[]>> _getLeaderboardScores;
         private Func<string, Task> _setPlayerName;
         private Func<string> _getPlayerName;
+        private LeaderboardScope _activeScope = LeaderboardScope.AllTime;
 
         [SerializeField] private Button _setPlayerNameButton;
         [SerializeField] private Button _closeButton;
@@ -38,6 +45,13 @@ namespace StackSurge.Meta
         {
             if (_leaderboardButton != null)
                 _leaderboardButton.onClick.AddListener(ToggleLeaderboard);
+
+            if (_dailyLeaderboardTabButton != null)
+                _dailyLeaderboardTabButton.onClick.AddListener(() => SetLeaderboardScope(LeaderboardScope.Daily));
+            if (_weeklyLeaderboardTabButton != null)
+                _weeklyLeaderboardTabButton.onClick.AddListener(() => SetLeaderboardScope(LeaderboardScope.Weekly));
+            if (_allTimeLeaderboardTabButton != null)
+                _allTimeLeaderboardTabButton.onClick.AddListener(() => SetLeaderboardScope(LeaderboardScope.AllTime));
 
             if (_setPlayerNameButton != null)
                 _setPlayerNameButton.onClick.AddListener(OnSetPlayerName);
@@ -64,7 +78,7 @@ namespace StackSurge.Meta
 
         // --- INITIALIZATION ---
         public void SetLeaderboardCallbacks(
-            Func<Task<LeaderboardEntryData[]>> getLeaderboardScores,
+            Func<LeaderboardScope, Task<LeaderboardEntryData[]>> getLeaderboardScores,
             Func<string, Task> setPlayerName,
             Func<string> getPlayerName)
         {
@@ -74,6 +88,8 @@ namespace StackSurge.Meta
 
             if (_playerNameInput != null)
                 _playerNameInput.text = _getPlayerName?.Invoke() ?? "";
+
+            RefreshLeaderboardScopeUi();
         }
 
         // --- REFRESH LOGIC ---
@@ -85,13 +101,13 @@ namespace StackSurge.Meta
             foreach (Transform child in _leaderboardRowContainer)
                 Destroy(child.gameObject);
 
-            _leaderboardStatusText.text = "Loading scores...";
+            _leaderboardStatusText.text = $"Loading {_activeScope.ToString().ToLower()} scores...";
             _leaderboardStatusText.gameObject.SetActive(true);
 
             LeaderboardEntryData[] entries = Array.Empty<LeaderboardEntryData>();
             if (_getLeaderboardScores != null)
             {
-                try { entries = await _getLeaderboardScores(); }
+                try { entries = await _getLeaderboardScores(_activeScope); }
                 catch { entries = Array.Empty<LeaderboardEntryData>(); }
             }
 
@@ -144,6 +160,7 @@ namespace StackSurge.Meta
                 if (_playerNameInput != null && _getPlayerName != null)
                     _playerNameInput.text = _getPlayerName();
 
+                RefreshLeaderboardScopeUi();
                 _ = RefreshLeaderboard(); // Trigger refresh when opening
             }
         }
@@ -160,6 +177,34 @@ namespace StackSurge.Meta
             await _setPlayerName(name);
             await Task.Delay(600); // Wait for propagation
             _ = RefreshLeaderboard();
+        }
+
+        public void SetLeaderboardScope(LeaderboardScope scope)
+        {
+            if (_activeScope == scope) return;
+            _activeScope = scope;
+            RefreshLeaderboardScopeUi();
+            _ = RefreshLeaderboard();
+        }
+
+        private void RefreshLeaderboardScopeUi()
+        {
+            if (_leaderboardTitleText != null)
+            {
+                _leaderboardTitleText.text = _activeScope switch
+                {
+                    LeaderboardScope.Daily   => "DAILY LEADERBOARD",
+                    LeaderboardScope.Weekly  => "WEEKLY LEADERBOARD",
+                    _                        => "ALL-TIME LEADERBOARD",
+                };
+            }
+
+            if (_dailyLeaderboardTabButton != null)
+                _dailyLeaderboardTabButton.interactable = _activeScope != LeaderboardScope.Daily;
+            if (_weeklyLeaderboardTabButton != null)
+                _weeklyLeaderboardTabButton.interactable = _activeScope != LeaderboardScope.Weekly;
+            if (_allTimeLeaderboardTabButton != null)
+                _allTimeLeaderboardTabButton.interactable = _activeScope != LeaderboardScope.AllTime;
         }
     }
 

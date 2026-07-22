@@ -20,17 +20,26 @@ namespace StackSurge.Meta
         public bool   IsCurrentPlayer;
     }
 
+    public enum LeaderboardScope
+    {
+        Daily,
+        Weekly,
+        AllTime
+    }
+
     /// <summary>
     /// Thin async wrapper around Unity Gaming Services Leaderboards.
-    /// Leaderboard ID: all_time_highs — Overall Score, highest-to-lowest, best score, weekly reset.
+    /// Supports daily, weekly, and all-time leaderboards via separate leaderboard IDs.
     ///
     /// Offline behaviour: scores are saved locally and submitted automatically the next time
     /// the service is online (either at startup or after reconnecting).
     /// </summary>
     public class LeaderboardService
     {
-        const string LeaderboardId = "all_time_highs";
-        const int    TopCount      = 10;
+        const string DailyLeaderboardId   = "daily_highs";
+        const string WeeklyLeaderboardId  = "weekly_highs";
+        const string AllTimeLeaderboardId = "all_time_highs";
+        const int    TopCount             = 10;
 
         readonly bool     _isOnline;
         readonly SaveData _save;
@@ -88,29 +97,43 @@ namespace StackSurge.Meta
         // ── Internal submit ─────────────────────────────────────────────────
         private async Task SubmitToCloudAsync(int score)
         {
-            try
+            foreach (string leaderboardId in new[] { DailyLeaderboardId, WeeklyLeaderboardId, AllTimeLeaderboardId })
             {
-                await LeaderboardsService.Instance.AddPlayerScoreAsync(LeaderboardId, score);
-                Debug.Log($"[LeaderboardService] Score {score} submitted to '{LeaderboardId}'.");
-            }
-            catch (Exception e)
-            {
-                Debug.LogWarning("[LeaderboardService] Submit failed: " + e.Message);
+                try
+                {
+                    await LeaderboardsService.Instance.AddPlayerScoreAsync(leaderboardId, score);
+                    Debug.Log($"[LeaderboardService] Score {score} submitted to '{leaderboardId}'.");
+                }
+                catch (Exception e)
+                {
+                    Debug.LogWarning($"[LeaderboardService] Submit failed for '{leaderboardId}': " + e.Message);
+                }
             }
         }
 
+        private static string GetLeaderboardId(LeaderboardScope scope)
+        {
+            return scope switch
+            {
+                LeaderboardScope.Daily   => DailyLeaderboardId,
+                LeaderboardScope.Weekly  => WeeklyLeaderboardId,
+                _                        => AllTimeLeaderboardId,
+            };
+        }
+
         // ── Fetch top scores ────────────────────────────────────────────────
-        public async Task<LeaderboardEntryData[]> GetTopScoresAsync()
+        public async Task<LeaderboardEntryData[]> GetTopScoresAsync(LeaderboardScope scope = LeaderboardScope.AllTime)
         {
             if (!_isOnline) return Array.Empty<LeaderboardEntryData>();
             try
             {
                 var options = new GetScoresOptions { Limit = TopCount, Offset = 0 };
-                var page    = await LeaderboardsService.Instance.GetScoresAsync(LeaderboardId, options);
+                string leaderboardId = GetLeaderboardId(scope);
+                var page = await LeaderboardsService.Instance.GetScoresAsync(leaderboardId, options);
 
                 string currentId = AuthenticationService.Instance.PlayerId;
-                var    entries   = new LeaderboardEntryData[page.Results.Count];
-                Debug.Log($"[LeaderboardService] Fetched {page.Results.Count} scores from '{LeaderboardId}'.");
+                var entries = new LeaderboardEntryData[page.Results.Count];
+                Debug.Log($"[LeaderboardService] Fetched {page.Results.Count} scores from '{leaderboardId}'.");
 
                 for (int i = 0; i < page.Results.Count; i++)
                 {

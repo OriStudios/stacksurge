@@ -178,7 +178,7 @@ namespace StackSurge
 
             _leaderboardService = new LeaderboardService(_provider.IsOnline, _save);
             _leaderboardManager.SetLeaderboardCallbacks(
-                () => _leaderboardService.GetTopScoresAsync(),
+                scope => _leaderboardService.GetTopScoresAsync(scope),
                 async name =>
                 {
                     _save.PlayerDisplayName = name;
@@ -597,7 +597,7 @@ namespace StackSurge
             LocalProgress.Save(_save);
             
             _leaderboardManager.SetLeaderboardCallbacks(
-                () => _leaderboardService.GetTopScoresAsync(),
+                scope => _leaderboardService.GetTopScoresAsync(scope),
                 async n =>
                 {
                     _save.PlayerDisplayName = n;
