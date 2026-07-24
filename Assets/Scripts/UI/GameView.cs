@@ -1,6 +1,7 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
+using System.Globalization;
 using System.Threading.Tasks;
 using StackSurge.Core;
 using StackSurge.Settings;
@@ -77,6 +78,15 @@ namespace StackSurge.UI
         [SerializeField] TextMeshProUGUI _mainMenuPlayerNameText;
         [SerializeField] TMP_InputField _mainMenuNameInput;
         [SerializeField] Button _mainMenuSaveNameButton;
+
+        [Header("Pause UI")]
+        [SerializeField] Button _pauseButton;
+        [SerializeField] GameObject _pauseMenuRoot;
+        [SerializeField] Button _pauseMenuResumeButton;
+        [SerializeField] Button _pauseMenuMainMenuButton;
+
+        [Header("Slow Rise Badge")]
+        [SerializeField] GameObject _slowRiseBadgePrefab;
         // ────────────────────────────────────────────────────────────────────
 
         // Vibration runtime state (persisted via PlayerPrefs)
@@ -102,6 +112,7 @@ namespace StackSurge.UI
         bool _challengesOpenedFromMainMenu;
 
         private int _lastScore = 0;
+        private bool _isPaused = false;
 
         private Color completedColor = new(0.29f, 0.87f, 0.50f);
         private Color pendingColor = new(0.29f, 0.33f, 0.39f);
@@ -164,6 +175,30 @@ namespace StackSurge.UI
 
             if (_challengesButton != null) _challengesButton.onClick.AddListener(ToggleChallenges);
             if (_helpButton != null) _helpButton.onClick.AddListener(ToggleHelp);
+            if (_pauseButton != null)
+            {
+                _pauseButton.onClick.RemoveAllListeners();
+                _pauseButton.onClick.AddListener(TogglePauseMenu);
+            }
+
+            if (_pauseMenuRoot != null)
+            {
+                _pauseMenuRoot.SetActive(false);
+                if (_pauseMenuResumeButton != null)
+                {
+                    _pauseMenuResumeButton.onClick.RemoveAllListeners();
+                    _pauseMenuResumeButton.onClick.AddListener(ResumeGame);
+                }
+                if (_pauseMenuMainMenuButton != null)
+                {
+                    _pauseMenuMainMenuButton.onClick.RemoveAllListeners();
+                    _pauseMenuMainMenuButton.onClick.AddListener(() =>
+                    {
+                        ResumeGame();
+                        _onMainMenu?.Invoke();
+                    });
+                }
+            }
 
             if (_challengesBody != null)
                 _challengesBody.gameObject.SetActive(false);
@@ -379,7 +414,7 @@ namespace StackSurge.UI
 
             if (score != _lastScore)
             {
-                _scoreText.text = score.ToString();
+                _scoreText.text = FormatScore(score);
                 _scoreText.transform.DOKill();
                 _scoreText.transform.localScale = Vector3.one;
                 _scoreText.transform.DOPunchScale(Vector3.one * 0.15f, 0.3f, 10, 1f);
@@ -392,6 +427,52 @@ namespace StackSurge.UI
 
             UpdatePreviewSquare(_nextPreviewImg, _nextInnerIcon, current);
             UpdatePreviewSquare(_queuedPreviewImg, _queuedInnerIcon, next);
+        }
+
+        private string FormatScore(int score)
+        {
+            return score.ToString("N0", CultureInfo.InvariantCulture);
+        }
+
+        public void TogglePauseMenu()
+        {
+            if (_pauseMenuRoot == null) return;
+            if (_isPaused) ResumeGame();
+            else PauseGame();
+        }
+
+        public void PauseGame()
+        {
+            if (_pauseMenuRoot != null)
+            {
+                _pauseMenuRoot.SetActive(true);
+                var cg = _pauseMenuRoot.GetComponent<CanvasGroup>();
+                if (cg != null)
+                {
+                    cg.alpha = 0f;
+                    cg.DOFade(1f, 0.2f).SetUpdate(true);
+                }
+            }
+            _isPaused = true;
+            Time.timeScale = 0f;
+        }
+
+        public void ResumeGame()
+        {
+            if (_pauseMenuRoot != null)
+            {
+                var cg = _pauseMenuRoot.GetComponent<CanvasGroup>();
+                if (cg != null)
+                {
+                    cg.DOFade(0f, 0.2f).SetUpdate(true).OnComplete(() => _pauseMenuRoot.SetActive(false));
+                }
+                else
+                {
+                    _pauseMenuRoot.SetActive(false);
+                }
+            }
+            _isPaused = false;
+            Time.timeScale = 1f;
         }
 
         private void UpdatePreviewSquare(Image img, Image innerIcon, TileKind k)
@@ -429,9 +510,9 @@ namespace StackSurge.UI
         {
             _hudRoot.SetActive(false);
 
-            _gameOverScore.text = $"Score: <size=120%>{score}</size>\n\n" +
-                                  $"Daily Best: {dailyBest}\n" +
-                                  $"All-time: {allTimeHigh}\n" +
+            _gameOverScore.text = $"Score: <size=120%>{FormatScore(score)}</size>\n\n" +
+                                  $"Daily Best: {FormatScore(dailyBest)}\n" +
+                                  $"All-time: {FormatScore(allTimeHigh)}\n" +
                                   $"Streak: {streak} {(streak == 1 ? "day" : "days")}";
 
             _gameOverRoot.SetActive(true);
@@ -506,10 +587,10 @@ namespace StackSurge.UI
             if (save == null) return;
 
             if (_mainMenuAllTimeHighText != null)
-                _mainMenuAllTimeHighText.text = save.AllTimeHigh.ToString();
+                _mainMenuAllTimeHighText.text = FormatScore(save.AllTimeHigh);
 
             if (_mainMenuDailyBestText != null)
-                _mainMenuDailyBestText.text = save.DailyBest.ToString();
+                _mainMenuDailyBestText.text = FormatScore(save.DailyBest);
 
             if (_mainMenuStreakText != null)
                 _mainMenuStreakText.text = $"{save.Streak} {(save.Streak == 1 ? "Day" : "Days")}";
@@ -1031,39 +1112,19 @@ namespace StackSurge.UI
             if (_slowRiseBadgeGo != null) { Destroy(_slowRiseBadgeGo); _slowRiseBadgeGo = null; }
             if (_slowRiseExpireCoroutine != null) { StopCoroutine(_slowRiseExpireCoroutine); _slowRiseExpireCoroutine = null; }
 
-            var parent = GetToastParent();
+            if (_slowRiseBadgePrefab == null)
+            {
+                Debug.LogWarning("[GameView] Slow rise badge prefab is not assigned.");
+                return;
+            }
 
-            var go = new GameObject("SlowRiseBadge");
-            go.transform.SetParent(parent, false);
+            var parent = GetToastParent();
+            var go = Instantiate(_slowRiseBadgePrefab, parent, false);
+            go.name = "SlowRiseBadge";
             _slowRiseBadgeGo = go;
 
-            var rt = go.AddComponent<RectTransform>();
-            rt.anchorMin = new Vector2(0.5f, 0.88f);
-            rt.anchorMax = new Vector2(0.5f, 0.88f);
-            rt.pivot = new Vector2(0.5f, 0.5f);
-            rt.sizeDelta = new Vector2(320f, 52f);
-
-            // Background pill
-            var bg = go.AddComponent<Image>();
-            bg.color = new Color(0.1f, 0.55f, 0.85f, 0.85f);
-
-            // Label
-            var textGo = new GameObject("Label");
-            textGo.transform.SetParent(go.transform, false);
-            var txt = textGo.AddComponent<TextMeshProUGUI>();
-            txt.text = "⬇ SLOW RISE";
-            txt.fontSize = 28;
-            txt.fontStyle = FontStyles.Bold;
-            txt.color = Color.white;
-            txt.alignment = TextAlignmentOptions.Center;
-            var trt = textGo.GetComponent<RectTransform>();
-            trt.anchorMin = Vector2.zero;
-            trt.anchorMax = Vector2.one;
-            trt.offsetMin = Vector2.zero;
-            trt.offsetMax = Vector2.zero;
-
-            // Entrance animation
-            var cg = go.AddComponent<CanvasGroup>();
+            var cg = go.GetComponent<CanvasGroup>();
+            if (cg == null) cg = go.AddComponent<CanvasGroup>();
             cg.alpha = 0f;
             cg.DOFade(1f, 0.3f).SetUpdate(true);
             go.transform.localScale = Vector3.one * 0.8f;
