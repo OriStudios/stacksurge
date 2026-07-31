@@ -69,7 +69,7 @@ namespace StackSurge.Meta
 
         static void NormalizeDailyState(SaveData data)
         {
-            var today = DateTime.Now.Date;
+            var today = DateTime.UtcNow.Date;
             string todayStr = today.ToString("yyyy-MM-dd");
 
             if (string.IsNullOrWhiteSpace(data.DailyDate) || data.DailyDate != todayStr)
@@ -90,7 +90,7 @@ namespace StackSurge.Meta
 
         public static void RegisterRunEnd(int score, SaveData data)
         {
-            var today = DateTime.Now.Date;
+            var today = DateTime.UtcNow.Date;
             string todayStr = today.ToString("yyyy-MM-dd");
 
             if (score > data.AllTimeHigh) data.AllTimeHigh = score;

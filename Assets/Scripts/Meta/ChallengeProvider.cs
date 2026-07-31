@@ -182,7 +182,7 @@ namespace StackSurge.Meta
         // ── Daily rotation check ─────────────────────────────────────
         void CheckDailyRotation()
         {
-            string today = DateTime.Now.Date.ToString("yyyy-MM-dd");
+            string today = DateTime.UtcNow.Date.ToString("yyyy-MM-dd");
             if (_save.ChallengeSetDate != today)
             {
                 Debug.Log($"[ChallengeProvider] Daily rotation: {_save.ChallengeSetDate} → {today}");
@@ -286,11 +286,11 @@ namespace StackSurge.Meta
         }
 
         /// <summary>
-        /// Returns the time remaining until the next daily rotation (midnight local time).
+        /// Returns the time remaining until the next daily rotation (midnight UTC).
         /// </summary>
         public TimeSpan GetTimeUntilReset()
         {
-            var now = DateTime.Now;
+            var now = DateTime.UtcNow;
             var midnight = now.Date.AddDays(1);
             return midnight - now;
         }
