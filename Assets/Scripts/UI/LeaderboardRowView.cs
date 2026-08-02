@@ -26,15 +26,13 @@ namespace StackSurge.UI
             // Rank Display (Icon or Text)
             if (entry.Rank <= 3)
             {
-                _rankIcon.gameObject.SetActive(true);
-                _rankText.gameObject.SetActive(false);
-                _rankIcon.sprite = entry.Rank switch { 1 => gold, 2 => silver, 3 => bronze, _ => null };
+                if (_rankIcon != null) { _rankIcon.gameObject.SetActive(true); _rankIcon.sprite = entry.Rank switch { 1 => gold, 2 => silver, 3 => bronze, _ => null }; }
+                if (_rankText != null)   _rankText.gameObject.SetActive(false);
             }
             else
             {
-                _rankIcon.gameObject.SetActive(false);
-                _rankText.gameObject.SetActive(true);
-                _rankText.text = $"#{entry.Rank}";
+                if (_rankIcon != null) _rankIcon.gameObject.SetActive(false);
+                if (_rankText != null) { _rankText.gameObject.SetActive(true); _rankText.text = $"{entry.Rank}"; }
             }
 
             // Name and Score

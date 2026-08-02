@@ -39,7 +39,7 @@ namespace StackSurge.Meta
         const string DailyLeaderboardId   = "daily_highs";
         const string WeeklyLeaderboardId  = "weekly_highs";
         const string AllTimeLeaderboardId = "all_time_highs";
-        const int    TopCount             = 10;
+        const int    TopCount             = 15;
 
         readonly bool     _isOnline;
         readonly SaveData _save;
@@ -155,6 +155,39 @@ namespace StackSurge.Meta
             {
                 Debug.LogWarning("[LeaderboardService] Fetch failed: " + e.Message);
                 return Array.Empty<LeaderboardEntryData>();
+            }
+        }
+
+        // ── Fetch current player's own entry ────────────────────────────────
+        /// <summary>
+        /// Returns the current player's leaderboard entry for the given scope,
+        /// or null if they have no score or the service is offline.
+        /// </summary>
+        public async Task<LeaderboardEntryData?> GetPlayerEntryAsync(LeaderboardScope scope = LeaderboardScope.AllTime)
+        {
+            if (!_isOnline) return null;
+            try
+            {
+                string leaderboardId = GetLeaderboardId(scope);
+                var result = await LeaderboardsService.Instance.GetPlayerScoreAsync(leaderboardId);
+                if (result == null) return null;
+
+                string currentId = AuthenticationService.Instance.PlayerId;
+                return new LeaderboardEntryData
+                {
+                    Rank            = result.Rank + 1,
+                    PlayerId        = result.PlayerId,
+                    PlayerName      = string.IsNullOrEmpty(result.PlayerName)
+                                          ? FormatAnonymousId(result.PlayerId)
+                                          : result.PlayerName,
+                    Score           = result.Score,
+                    IsCurrentPlayer = true
+                };
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[LeaderboardService] GetPlayerEntry failed: " + e.Message);
+                return null;
             }
         }
 

@@ -2119,11 +2119,11 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_SizeDelta.x
-      value: 780.1724
+      value: 800
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 1509.7655
+      value: 1600
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2159,7 +2159,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 45.03579
+      value: 0
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -2320,6 +2320,7 @@ MonoBehaviour:
   _leaderboardRowContainer: {fileID: 170510807}
   _leaderboardStatusText: {fileID: 540686824}
   _playerNameInput: {fileID: 2117245047}
+  _yourPositionText: {fileID: 1686970633}
   _dailyLeaderboardTabButton: {fileID: 1397544279}
   _weeklyLeaderboardTabButton: {fileID: 319838953}
   _allTimeLeaderboardTabButton: {fileID: 1514074027}
@@ -2797,6 +2798,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2da0c512f12947e489f739169773d7ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TMP_InputField
+--- !u!114 &1686970633 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 810684332614155373, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: f4688fdb7df04437aeb418b961361dc5, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TextMeshProUGUI
 --- !u!114 &1772533430 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 3277846436869762236, guid: b9e97a9f6ff0a4ef897b368eb845fd6a, type: 3}

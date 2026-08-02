@@ -15,6 +15,7 @@ namespace StackSurge.Meta
         [SerializeField] private Transform _leaderboardRowContainer;
         [SerializeField] private TextMeshProUGUI _leaderboardStatusText;
         [SerializeField] private TMP_InputField _playerNameInput;
+        [SerializeField] private TextMeshProUGUI _yourPositionText;
 
         [Header("Leaderboard Tabs")]
         [SerializeField] private Button _dailyLeaderboardTabButton;
@@ -29,9 +30,11 @@ namespace StackSurge.Meta
         [SerializeField] private Sprite _goldMedal, _silverMedal, _bronzeMedal;
 
         private Func<LeaderboardScope, Task<LeaderboardEntryData[]>> _getLeaderboardScores;
+        private Func<LeaderboardScope, Task<LeaderboardEntryData?>> _getPlayerEntry;
         private Func<string, Task> _setPlayerName;
         private Func<string> _getPlayerName;
         private LeaderboardScope _activeScope = LeaderboardScope.AllTime;
+        private int _refreshGeneration = 0; // incremented on every refresh; stale calls self-abort
 
         [SerializeField] private Button _setPlayerNameButton;
         [SerializeField] private Button _closeButton;
@@ -79,12 +82,14 @@ namespace StackSurge.Meta
         // --- INITIALIZATION ---
         public void SetLeaderboardCallbacks(
             Func<LeaderboardScope, Task<LeaderboardEntryData[]>> getLeaderboardScores,
+            Func<LeaderboardScope, Task<LeaderboardEntryData?>> getPlayerEntry,
             Func<string, Task> setPlayerName,
             Func<string> getPlayerName)
         {
             _getLeaderboardScores = getLeaderboardScores;
-            _setPlayerName = setPlayerName;
-            _getPlayerName = getPlayerName;
+            _getPlayerEntry       = getPlayerEntry;
+            _setPlayerName        = setPlayerName;
+            _getPlayerName        = getPlayerName;
 
             if (_playerNameInput != null)
                 _playerNameInput.text = _getPlayerName?.Invoke() ?? "";
@@ -96,6 +101,9 @@ namespace StackSurge.Meta
         public async Task RefreshLeaderboard()
         {
             if (_leaderboardRowContainer == null) return;
+
+            // Claim this refresh slot; any older in-flight call will see a stale generation and abort.
+            int generation = ++_refreshGeneration;
 
             // Clear existing rows
             foreach (Transform child in _leaderboardRowContainer)
@@ -111,7 +119,29 @@ namespace StackSurge.Meta
                 catch { entries = Array.Empty<LeaderboardEntryData>(); }
             }
 
+            // Another tab was clicked while we were awaiting – discard these results.
+            if (generation != _refreshGeneration) return;
+
             _leaderboardStatusText.gameObject.SetActive(false);
+
+            // Fetch the current player's personal entry (rank + score)
+            LeaderboardEntryData? playerEntry = null;
+            if (_getPlayerEntry != null)
+            {
+                try { playerEntry = await _getPlayerEntry(_activeScope); }
+                catch { /* swallow – non-critical */ }
+            }
+
+            // Discard again if superseded during the second await.
+            if (generation != _refreshGeneration) return;
+
+            // Populate "Your position" header
+            if (_yourPositionText != null)
+            {
+                _yourPositionText.text = playerEntry.HasValue
+                    ? $"Your position: #{playerEntry.Value.Rank}"
+                    : "Your position: —";
+            }
 
             if (entries.Length == 0)
             {
@@ -120,11 +150,23 @@ namespace StackSurge.Meta
                 return;
             }
 
-            // Build new rows
+            // Determine whether the current player is already visible in the top list
+            bool playerInTop = false;
+            for (int i = 0; i < entries.Length; i++)
+                if (entries[i].IsCurrentPlayer) { playerInTop = true; break; }
+
+            // Build top-15 rows
             for (int i = 0; i < entries.Length; i++)
             {
                 var row = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
                 row.Setup(entries[i], _goldMedal, _silverMedal, _bronzeMedal, i);
+            }
+
+            // If the player is outside the top 15, append their row as #16
+            if (!playerInTop && playerEntry.HasValue)
+            {
+                var overflowRow = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
+                overflowRow.Setup(playerEntry.Value, _goldMedal, _silverMedal, _bronzeMedal, entries.Length);
             }
         }
 
