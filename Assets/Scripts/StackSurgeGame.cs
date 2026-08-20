@@ -184,6 +184,9 @@ namespace StackSurge
                 _friendsManagerUI.Initialize(_friendsService);
             }
 
+            // Ensure Friends SDK is initialized and publish Online presence
+            _ = _friendsService.EnsureInitializedAsync();
+
             _leaderboardService = new LeaderboardService(_provider.IsOnline, _save);
             _leaderboardManager.SetLeaderboardCallbacks(
                 scope => _leaderboardService.GetTopScoresAsync(scope),

@@ -146,6 +146,35 @@ namespace StackSurge.UI
             AnimateIn(delayIndex);
         }
 
+        public void SetupBlocked(
+            FriendData blocked,
+            Action<string> onUnblock,
+            int delayIndex = 0)
+        {
+            if (_nameText != null) _nameText.text = blocked.PlayerName;
+            if (_activityText != null) _activityText.text = "Blocked";
+
+            if (_statusText != null) _statusText.text = "Blocked";
+
+            if (_statusIndicatorImage != null)
+                _statusIndicatorImage.color = _offlineColor;
+
+            // Only show the Unblock button; hide all others
+            if (_acceptButton != null)  _acceptButton.gameObject.SetActive(false);
+            if (_declineButton != null) _declineButton.gameObject.SetActive(false);
+            if (_removeButton != null)  _removeButton.gameObject.SetActive(false);
+
+            if (_blockButton != null)
+            {
+                _blockButton.gameObject.SetActive(true);
+                SetButtonText(_blockButton, "Unblock");
+                _blockButton.onClick.RemoveAllListeners();
+                _blockButton.onClick.AddListener(() => onUnblock?.Invoke(blocked.PlayerId));
+            }
+
+            AnimateIn(delayIndex);
+        }
+
         private static void SetButtonText(Button btn, string label)
         {
             if (btn == null) return;

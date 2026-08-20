@@ -13,7 +13,8 @@ namespace StackSurge.UI
     {
         FriendsList,
         PendingRequests,
-        AddFriend
+        AddFriend,
+        BlockedUsers
     }
 
     /// <summary>
@@ -33,6 +34,7 @@ namespace StackSurge.UI
         [SerializeField] private Button _friendsTabButton;
         [SerializeField] private Button _requestsTabButton;
         [SerializeField] private Button _addFriendTabButton;
+        [SerializeField] private Button _blockedTabButton;
 
         [Header("Add Friend Section")]
         [SerializeField] private GameObject _addFriendSection;
@@ -111,6 +113,12 @@ namespace StackSurge.UI
             {
                 _addFriendTabButton.onClick.RemoveAllListeners();
                 _addFriendTabButton.onClick.AddListener(() => SetTab(FriendsTab.AddFriend));
+            }
+
+            if (_blockedTabButton != null)
+            {
+                _blockedTabButton.onClick.RemoveAllListeners();
+                _blockedTabButton.onClick.AddListener(() => SetTab(FriendsTab.BlockedUsers));
             }
 
             if (_sendRequestButton != null)
@@ -221,9 +229,10 @@ namespace StackSurge.UI
             }
 
             // Highlight Active Tab Button
-            SetTabButtonHighlight(_friendsTabButton, _activeTab == FriendsTab.FriendsList);
-            SetTabButtonHighlight(_requestsTabButton, _activeTab == FriendsTab.PendingRequests);
+            SetTabButtonHighlight(_friendsTabButton,   _activeTab == FriendsTab.FriendsList);
+            SetTabButtonHighlight(_requestsTabButton,  _activeTab == FriendsTab.PendingRequests);
             SetTabButtonHighlight(_addFriendTabButton, _activeTab == FriendsTab.AddFriend);
+            SetTabButtonHighlight(_blockedTabButton,   _activeTab == FriendsTab.BlockedUsers);
         }
 
         private static void SetTabButtonHighlight(Button btn, bool isActive)
@@ -254,6 +263,9 @@ namespace StackSurge.UI
                     break;
                 case FriendsTab.AddFriend:
                     SetStatus("Enter a Player ID above to send a friend request.");
+                    break;
+                case FriendsTab.BlockedUsers:
+                    await LoadBlockedUsersAsync(generation);
                     break;
             }
         }
@@ -441,6 +453,60 @@ namespace StackSurge.UI
             else
             {
                 SetStatus("Failed to block user.");
+            }
+        }
+
+        private async Task LoadBlockedUsersAsync(int generation)
+        {
+            SetStatus("Loading blocked users...");
+            List<FriendData> blocked = null;
+            try
+            {
+                if (_friendsService != null)
+                    blocked = await _friendsService.GetBlockedUsersAsync();
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[FriendsManagerUI] LoadBlockedUsers failed: " + e.Message);
+            }
+
+            if (generation != _refreshGeneration) return;
+
+            ClearContainer();
+
+            if (blocked == null || blocked.Count == 0)
+            {
+                SetStatus("");
+                DisplayEmptyState("No blocked users.");
+                return;
+            }
+
+            SetStatus("");
+
+            for (int i = 0; i < blocked.Count; i++)
+            {
+                if (_friendsRowContainer == null || _rowPrefab == null) break;
+                FriendsRowView row = Instantiate(_rowPrefab, _friendsRowContainer);
+                row.SetupBlocked(
+                    blocked[i],
+                    onUnblock: async (playerId) => await UnblockUserAsync(playerId),
+                    delayIndex: i
+                );
+            }
+        }
+
+        private async Task UnblockUserAsync(string playerId)
+        {
+            SetStatus("Unblocking user...");
+            bool success = await _friendsService.UnblockUserAsync(playerId);
+            if (success)
+            {
+                SetStatus($"User {playerId} unblocked.");
+                await RefreshTabAsync();
+            }
+            else
+            {
+                SetStatus("Failed to unblock user.");
             }
         }
 

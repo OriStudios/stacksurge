@@ -78,11 +78,42 @@ namespace StackSurge.Meta
                     _isInitialized = true;
                     SubscribeToServiceEvents();
                     Debug.Log("[FriendsService] UGS Friends Service initialized successfully.");
+
+                    // Publish online status so friends can see us as Online
+                    _ = PublishPresenceAsync(PresenceStatus.Online);
                 }
             }
             catch (Exception e)
             {
                 Debug.LogWarning("[FriendsService] Initialization failed (falling back to local mode): " + e.Message);
+            }
+        }
+
+        /// <summary>
+        /// Publishes the local player's presence availability to UGS Friends.
+        /// Call with Online when signing in, Offline when quitting.
+        /// No-op in offline/mock mode.
+        /// </summary>
+        public async Task PublishPresenceAsync(PresenceStatus status)
+        {
+            if (!_isOnline || !_isInitialized || UgsFriendsService.Instance == null) return;
+
+            try
+            {
+                Unity.Services.Friends.Models.Availability availability = status switch
+                {
+                    PresenceStatus.Online  => Unity.Services.Friends.Models.Availability.Online,
+                    PresenceStatus.Busy    => Unity.Services.Friends.Models.Availability.Busy,
+                    PresenceStatus.InGame  => Unity.Services.Friends.Models.Availability.Online, // Map InGame -> Online for UGS
+                    _                      => Unity.Services.Friends.Models.Availability.Offline
+                };
+
+                await UgsFriendsService.Instance.SetPresenceAvailabilityAsync(availability);
+                Debug.Log($"[FriendsService] Presence published: {status}");
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning($"[FriendsService] PublishPresence failed: " + e.Message);
             }
         }
 
@@ -211,7 +242,10 @@ namespace StackSurge.Meta
                     {
                         var member = rel.Member;
                         string memberId = member?.Id ?? "Unknown";
-                        string name = FormatPlayerId(memberId);
+                        // Prefer the UGS display name (player#NNNNN), fall back to raw ID
+                        string name = !string.IsNullOrEmpty(member?.Profile?.Name)
+                            ? member.Profile.Name
+                            : FormatPlayerId(memberId);
                         
                         PresenceStatus status = PresenceStatus.Offline;
                         string activity = "Offline";
@@ -259,12 +293,16 @@ namespace StackSurge.Meta
                 {
                     foreach (var rel in incoming)
                     {
-                        string memberId = rel.Member?.Id ?? "Unknown";
+                        var member = rel.Member;
+                        string memberId = member?.Id ?? "Unknown";
+                        string name = !string.IsNullOrEmpty(member?.Profile?.Name)
+                            ? member.Profile.Name
+                            : FormatPlayerId(memberId);
                         requests.Add(new FriendRequestData
                         {
                             RelationshipId = rel.Id,
                             PlayerId = memberId,
-                            PlayerName = FormatPlayerId(memberId),
+                            PlayerName = name,
                             IsIncoming = true
                         });
                     }
@@ -303,14 +341,18 @@ namespace StackSurge.Meta
                 {
                     foreach (var rel in outgoing)
                     {
-                        string memberId = rel.Member?.Id ?? "Unknown";
+                        var member = rel.Member;
+                        string memberId = member?.Id ?? "Unknown";
                         if (!requests.Exists(r => r.PlayerId == memberId))
                         {
+                            string name = !string.IsNullOrEmpty(member?.Profile?.Name)
+                                ? member.Profile.Name
+                                : FormatPlayerId(memberId);
                             requests.Add(new FriendRequestData
                             {
                                 RelationshipId = rel.Id,
                                 PlayerId = memberId,
-                                PlayerName = FormatPlayerId(memberId),
+                                PlayerName = name,
                                 IsIncoming = false
                             });
                         }
@@ -479,6 +521,61 @@ namespace StackSurge.Meta
             }
         }
 
+        // ── Blocked Users List ──────────────────────────────────────────────
+        public async Task<List<FriendData>> GetBlockedUsersAsync()
+        {
+            await EnsureInitializedAsync();
+
+            if (!_isOnline || !_isInitialized || UgsFriendsService.Instance == null)
+            {
+                // Return mock blocked users as FriendData so the UI can render them
+                var mockList = new List<FriendData>();
+                foreach (string pid in _mockBlocked)
+                {
+                    mockList.Add(new FriendData
+                    {
+                        RelationshipId = "blocked_" + pid,
+                        PlayerId = pid,
+                        PlayerName = pid,
+                        Status = PresenceStatus.Offline,
+                        Activity = "Blocked"
+                    });
+                }
+                return mockList;
+            }
+
+            try
+            {
+                var blockedList = new List<FriendData>();
+                IReadOnlyList<Relationship> blocks = UgsFriendsService.Instance.Blocks;
+                if (blocks != null)
+                {
+                    foreach (var rel in blocks)
+                    {
+                        var member = rel.Member;
+                        string memberId = member?.Id ?? "Unknown";
+                        string name = !string.IsNullOrEmpty(member?.Profile?.Name)
+                            ? member.Profile.Name
+                            : FormatPlayerId(memberId);
+                        blockedList.Add(new FriendData
+                        {
+                            RelationshipId = rel.Id,
+                            PlayerId = memberId,
+                            PlayerName = name,
+                            Status = PresenceStatus.Offline,
+                            Activity = "Blocked"
+                        });
+                    }
+                }
+                return blockedList;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[FriendsService] GetBlockedUsers failed: " + e.Message);
+                return new List<FriendData>();
+            }
+        }
+
         // ── Block / Unblock User ────────────────────────────────────────────
         public async Task<bool> BlockUserAsync(string targetPlayerId)
         {
@@ -556,7 +653,11 @@ namespace StackSurge.Meta
 
         private static string FormatPlayerId(string id)
         {
+            // Raw UGS player IDs are long hex strings. Show them shortened if no display name is available.
             if (string.IsNullOrEmpty(id)) return "Player";
+            // If it looks like a UGS hex ID (>16 chars, no spaces), shorten it
+            if (id.Length > 16 && !id.Contains(' '))
+                return "player#" + id.Substring(id.Length - 5).ToUpper();
             return id;
         }
     }
