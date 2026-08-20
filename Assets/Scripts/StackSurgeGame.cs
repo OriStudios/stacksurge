@@ -21,12 +21,14 @@ namespace StackSurge
 
         [SerializeField] GameView _view;
         [SerializeField] LeaderboardManager _leaderboardManager;
+        [SerializeField] FriendsManagerUI _friendsManagerUI;
         GameBoard _board;
         ScoreService _score;
         SaveData _save;
         ChallengeTracker _challenges;
         ChallengeProvider _provider;
         LeaderboardService _leaderboardService;
+        FriendsService _friendsService;
 
         TileKind _current;
         TileKind _next;
@@ -176,6 +178,12 @@ namespace StackSurge
             var defs = _challengeAssets != null && _challengeAssets.Length > 0 ? _challengeAssets : BuildDefaultChallenges();
             await _provider.InitializeAsync(_save, defs);
 
+            _friendsService = new FriendsService(_provider.IsOnline, _save);
+            if (_friendsManagerUI != null)
+            {
+                _friendsManagerUI.Initialize(_friendsService);
+            }
+
             _leaderboardService = new LeaderboardService(_provider.IsOnline, _save);
             _leaderboardManager.SetLeaderboardCallbacks(
                 scope => _leaderboardService.GetTopScoresAsync(scope),
@@ -186,7 +194,15 @@ namespace StackSurge
                     LocalProgress.Save(_save);
                     await _leaderboardService.SetPlayerNameAsync(name);
                 },
-                () => _save.PlayerDisplayName
+                () => _save.PlayerDisplayName,
+                async targetPlayerId =>
+                {
+                    if (_friendsService != null)
+                    {
+                        bool success = await _friendsService.SendFriendRequestAsync(targetPlayerId);
+                        Debug.Log($"[StackSurgeGame] Leaderboard Add Friend to {targetPlayerId}: {(success ? "Success" : "Failed")}");
+                    }
+                }
             );
 
             _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "NO INTERNET, PLAYING OFFLINE");
@@ -235,6 +251,7 @@ namespace StackSurge
             _view.SetTutorialActive(false); // Re-enable all buttons (covers tutorial->game and menu->game)
             _view.HideMainMenu();
             if (_leaderboardManager != null) _leaderboardManager.HideLeaderboard();
+            if (_friendsManagerUI != null) _friendsManagerUI.ClosePanel();
             _board = new GameBoard(_settings.Columns, _settings.Rows);
             _score = new ScoreService();
             _score.Reset(_settings.ComboWindowSeconds);

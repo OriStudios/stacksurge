@@ -33,6 +33,7 @@ namespace StackSurge.Meta
         private Func<LeaderboardScope, Task<LeaderboardEntryData?>> _getPlayerEntry;
         private Func<string, Task> _setPlayerName;
         private Func<string> _getPlayerName;
+        private Action<string> _onAddFriend;
         private LeaderboardScope _activeScope = LeaderboardScope.AllTime;
         private int _refreshGeneration = 0; // incremented on every refresh; stale calls self-abort
 
@@ -84,12 +85,14 @@ namespace StackSurge.Meta
             Func<LeaderboardScope, Task<LeaderboardEntryData[]>> getLeaderboardScores,
             Func<LeaderboardScope, Task<LeaderboardEntryData?>> getPlayerEntry,
             Func<string, Task> setPlayerName,
-            Func<string> getPlayerName)
+            Func<string> getPlayerName,
+            Action<string> onAddFriend = null)
         {
             _getLeaderboardScores = getLeaderboardScores;
             _getPlayerEntry       = getPlayerEntry;
             _setPlayerName        = setPlayerName;
             _getPlayerName        = getPlayerName;
+            _onAddFriend          = onAddFriend;
 
             if (_playerNameInput != null)
                 _playerNameInput.text = _getPlayerName?.Invoke() ?? "";
@@ -159,14 +162,14 @@ namespace StackSurge.Meta
             for (int i = 0; i < entries.Length; i++)
             {
                 var row = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
-                row.Setup(entries[i], _goldMedal, _silverMedal, _bronzeMedal, i);
+                row.Setup(entries[i], _goldMedal, _silverMedal, _bronzeMedal, i, _onAddFriend);
             }
 
             // If the player is outside the top 15, append their row as #16
             if (!playerInTop && playerEntry.HasValue)
             {
                 var overflowRow = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
-                overflowRow.Setup(playerEntry.Value, _goldMedal, _silverMedal, _bronzeMedal, entries.Length);
+                overflowRow.Setup(playerEntry.Value, _goldMedal, _silverMedal, _bronzeMedal, entries.Length, _onAddFriend);
             }
         }
 
