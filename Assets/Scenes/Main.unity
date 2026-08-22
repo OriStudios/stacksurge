@@ -642,6 +642,17 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 2da0c512f12947e489f739169773d7ca, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Unity.TextMeshPro::TMPro.TMP_InputField
+--- !u!114 &386175750 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 6374831666105598506, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!114 &421613390 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 7840173617868314341, guid: 57b7c06d6036e4780b55864166d452ea, type: 3}
@@ -2165,13 +2176,29 @@ PrefabInstance:
     serializedVersion: 3
     m_TransformParent: {fileID: 1356932687}
     m_Modifications:
-    - target: {fileID: 1591493936758234998, guid: d785305d7febf4e32964b23ec208d475, type: 3}
-      propertyPath: _rowPrefab
-      value: 
-      objectReference: {fileID: 6720231906533129593, guid: 39692c93e65b44886a9b67f138ff3249, type: 3}
-    - target: {fileID: 1591493936758234998, guid: d785305d7febf4e32964b23ec208d475, type: 3}
-      propertyPath: _leaderboardButton
-      value: 
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 280
+      objectReference: {fileID: 0}
+    - target: {fileID: 991035490085297192, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -23.122
       objectReference: {fileID: 0}
     - target: {fileID: 4966457675737913146, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_Name
@@ -2211,7 +2238,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_SizeDelta.y
-      value: 1600
+      value: 1650.0007
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_LocalPosition.x
@@ -2247,7 +2274,7 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_AnchoredPosition.y
-      value: 0
+      value: -24.999664
       objectReference: {fileID: 0}
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
@@ -2260,6 +2287,30 @@ PrefabInstance:
     - target: {fileID: 6531466225800786969, guid: d785305d7febf4e32964b23ec208d475, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
       value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMax.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMax.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMin.x
+      value: 0
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchorMin.y
+      value: 1
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchoredPosition.x
+      value: 470
+      objectReference: {fileID: 0}
+    - target: {fileID: 7757461134594071082, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+      propertyPath: m_AnchoredPosition.y
+      value: -23.122
       objectReference: {fileID: 0}
     m_RemovedComponents: []
     m_RemovedGameObjects: []
@@ -2413,6 +2464,8 @@ MonoBehaviour:
   _weeklyLeaderboardTabButton: {fileID: 319838953}
   _allTimeLeaderboardTabButton: {fileID: 1514074027}
   _leaderboardTitleText: {fileID: 1039622957}
+  _globalFilterButton: {fileID: 386175750}
+  _friendsFilterButton: {fileID: 1802525621}
   _leaderboardButton: {fileID: 64185594}
   _rowPrefab: {fileID: 6720231906533129593, guid: 39692c93e65b44886a9b67f138ff3249, type: 3}
   _goldMedal: {fileID: -1338536364, guid: 60d55fd5383ee4b0fb6e7468bf63628b, type: 3}
@@ -3258,6 +3311,17 @@ CanvasRenderer:
   m_PrefabAsset: {fileID: 0}
   m_GameObject: {fileID: 1782553118}
   m_CullTransparentMesh: 1
+--- !u!114 &1802525621 stripped
+MonoBehaviour:
+  m_CorrespondingSourceObject: {fileID: 2959291637438554832, guid: d785305d7febf4e32964b23ec208d475, type: 3}
+  m_PrefabInstance: {fileID: 1304627122}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 4e29b1a8efbd4b44bb3f3716e73f07ff, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: UnityEngine.UI::UnityEngine.UI.Button
 --- !u!114 &1822376243 stripped
 MonoBehaviour:
   m_CorrespondingSourceObject: {fileID: 2515108686500832081, guid: b9e97a9f6ff0a4ef897b368eb845fd6a, type: 3}

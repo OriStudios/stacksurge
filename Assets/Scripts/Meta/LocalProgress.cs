@@ -34,6 +34,16 @@ namespace StackSurge.Meta
         /// -1 means no pending score.
         /// </summary>
         public int PendingLeaderboardScore = -1;
+
+        // ── Notification Settings & State ──────────────────────────────
+        public bool NotifyLeaderboardDrops = true;
+        public bool NotifyFriendActivity = true;
+        public bool NotifyReminders = true;
+        // Per-scope last known ranks (-1 = never seen)
+        public int LastKnownRankDaily = -1;
+        public int LastKnownRankWeekly = -1;
+        public int LastKnownRankAllTime = -1;
+        public string DevicePushToken = "";
     }
 
     public static class LocalProgress

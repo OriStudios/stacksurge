@@ -156,6 +156,8 @@ namespace StackSurge.Meta
         private void OnRelationshipAdded(IRelationshipAddedEvent e)
         {
             Debug.Log($"[FriendsService] Relationship added event received.");
+            string friendName = e.Relationship?.Member?.Profile?.Name ?? "A friend";
+            NotificationService.Instance?.NotifyFriendRequestAccepted(friendName);
             OnFriendsUpdated?.Invoke();
         }
 
@@ -273,6 +275,23 @@ namespace StackSurge.Meta
                 Debug.LogWarning("[FriendsService] GetFriends failed: " + e.Message);
                 return new List<FriendData>(_mockFriends);
             }
+        }
+
+        public async Task<List<string>> GetFriendPlayerIdsAsync()
+        {
+            var friends = await GetFriendsAsync();
+            var ids = new List<string>();
+            if (friends != null)
+            {
+                foreach (var f in friends)
+                {
+                    if (!string.IsNullOrEmpty(f.PlayerId) && !ids.Contains(f.PlayerId))
+                    {
+                        ids.Add(f.PlayerId);
+                    }
+                }
+            }
+            return ids;
         }
 
         // ── Fetch Incoming & Outgoing Requests ──────────────────────────────

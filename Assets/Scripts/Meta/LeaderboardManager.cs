@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using DG.Tweening;
 using StackSurge.UI;
@@ -8,6 +9,12 @@ using UnityEngine.UI;
 
 namespace StackSurge.Meta
 {
+    public enum LeaderboardFilterMode
+    {
+        Global,
+        FriendsOnly
+    }
+
     public class LeaderboardManager : MonoBehaviour
     {
         [Header("UI References")]
@@ -23,6 +30,10 @@ namespace StackSurge.Meta
         [SerializeField] private Button _allTimeLeaderboardTabButton;
         [SerializeField] private TextMeshProUGUI _leaderboardTitleText;
 
+        [Header("Leaderboard Filters")]
+        [SerializeField] private Button _globalFilterButton;
+        [SerializeField] private Button _friendsFilterButton;
+
         [SerializeField] private Button _leaderboardButton;
 
         [Header("Assets")]
@@ -30,11 +41,14 @@ namespace StackSurge.Meta
         [SerializeField] private Sprite _goldMedal, _silverMedal, _bronzeMedal;
 
         private Func<LeaderboardScope, Task<LeaderboardEntryData[]>> _getLeaderboardScores;
+        private Func<LeaderboardScope, List<string>, Task<LeaderboardEntryData[]>> _getFriendsScores;
+        private Func<Task<List<string>>> _getFriendIds;
         private Func<LeaderboardScope, Task<LeaderboardEntryData?>> _getPlayerEntry;
         private Func<string, Task> _setPlayerName;
         private Func<string> _getPlayerName;
         private Action<string> _onAddFriend;
         private LeaderboardScope _activeScope = LeaderboardScope.AllTime;
+        private LeaderboardFilterMode _activeFilter = LeaderboardFilterMode.Global;
         private int _refreshGeneration = 0; // incremented on every refresh; stale calls self-abort
 
         [SerializeField] private Button _setPlayerNameButton;
@@ -57,14 +71,16 @@ namespace StackSurge.Meta
             if (_allTimeLeaderboardTabButton != null)
                 _allTimeLeaderboardTabButton.onClick.AddListener(() => SetLeaderboardScope(LeaderboardScope.AllTime));
 
+            if (_globalFilterButton != null)
+                _globalFilterButton.onClick.AddListener(() => SetFilterMode(LeaderboardFilterMode.Global));
+            if (_friendsFilterButton != null)
+                _friendsFilterButton.onClick.AddListener(() => SetFilterMode(LeaderboardFilterMode.FriendsOnly));
+
             if (_setPlayerNameButton != null)
                 _setPlayerNameButton.onClick.AddListener(OnSetPlayerName);
 
             if (_closeButton != null)
                 _closeButton.onClick.AddListener(ToggleLeaderboard);
-
-            //if (_restoreArchiveButton != null)
-            //    _restoreArchiveButton.onClick.AddListener(OnRestoreArchive);
         }
 
         //Restore archived leaderboard scores when the button is clicked
@@ -86,13 +102,17 @@ namespace StackSurge.Meta
             Func<LeaderboardScope, Task<LeaderboardEntryData?>> getPlayerEntry,
             Func<string, Task> setPlayerName,
             Func<string> getPlayerName,
-            Action<string> onAddFriend = null)
+            Action<string> onAddFriend = null,
+            Func<LeaderboardScope, List<string>, Task<LeaderboardEntryData[]>> getFriendsScores = null,
+            Func<Task<List<string>>> getFriendIds = null)
         {
             _getLeaderboardScores = getLeaderboardScores;
             _getPlayerEntry       = getPlayerEntry;
             _setPlayerName        = setPlayerName;
             _getPlayerName        = getPlayerName;
             _onAddFriend          = onAddFriend;
+            _getFriendsScores     = getFriendsScores;
+            _getFriendIds         = getFriendIds;
 
             if (_playerNameInput != null)
                 _playerNameInput.text = _getPlayerName?.Invoke() ?? "";
@@ -112,11 +132,22 @@ namespace StackSurge.Meta
             foreach (Transform child in _leaderboardRowContainer)
                 Destroy(child.gameObject);
 
-            _leaderboardStatusText.text = $"Loading {_activeScope.ToString().ToLower()} scores...";
+            _leaderboardStatusText.text = _activeFilter == LeaderboardFilterMode.FriendsOnly
+                ? $"Loading {_activeScope.ToString().ToLower()} friend scores..."
+                : $"Loading {_activeScope.ToString().ToLower()} scores...";
             _leaderboardStatusText.gameObject.SetActive(true);
 
             LeaderboardEntryData[] entries = Array.Empty<LeaderboardEntryData>();
-            if (_getLeaderboardScores != null)
+            if (_activeFilter == LeaderboardFilterMode.FriendsOnly && _getFriendsScores != null && _getFriendIds != null)
+            {
+                try
+                {
+                    List<string> friendIds = await _getFriendIds();
+                    entries = await _getFriendsScores(_activeScope, friendIds);
+                }
+                catch { entries = Array.Empty<LeaderboardEntryData>(); }
+            }
+            else if (_getLeaderboardScores != null)
             {
                 try { entries = await _getLeaderboardScores(_activeScope); }
                 catch { entries = Array.Empty<LeaderboardEntryData>(); }
@@ -127,49 +158,79 @@ namespace StackSurge.Meta
 
             _leaderboardStatusText.gameObject.SetActive(false);
 
-            // Fetch the current player's personal entry (rank + score)
-            LeaderboardEntryData? playerEntry = null;
-            if (_getPlayerEntry != null)
+            // Find current player in fetched entries list
+            LeaderboardEntryData? currentInList = null;
+            for (int i = 0; i < entries.Length; i++)
             {
-                try { playerEntry = await _getPlayerEntry(_activeScope); }
-                catch { /* swallow – non-critical */ }
+                if (entries[i].IsCurrentPlayer)
+                {
+                    currentInList = entries[i];
+                    break;
+                }
             }
 
-            // Discard again if superseded during the second await.
-            if (generation != _refreshGeneration) return;
+            int? displayRank = null;
+            LeaderboardEntryData? globalPlayerEntry = null;
+
+            if (_activeFilter == LeaderboardFilterMode.FriendsOnly)
+            {
+                // In Friends mode, rank is relative among friends
+                if (currentInList.HasValue)
+                {
+                    displayRank = currentInList.Value.Rank;
+                }
+            }
+            else
+            {
+                // In Global mode, fetch global rank even if player is outside top 15
+                if (_getPlayerEntry != null)
+                {
+                    try { globalPlayerEntry = await _getPlayerEntry(_activeScope); }
+                    catch { /* swallow – non-critical */ }
+                }
+
+                if (generation != _refreshGeneration) return;
+
+                if (currentInList.HasValue)
+                    displayRank = currentInList.Value.Rank;
+                else if (globalPlayerEntry.HasValue)
+                    displayRank = globalPlayerEntry.Value.Rank;
+            }
+
+            if (displayRank.HasValue)
+            {
+                NotificationService.Instance?.CheckAndNotifyRankDrop(displayRank.Value, _activeScope, $"{_activeScope} Leaderboard");
+            }
 
             // Populate "Your position" header
             if (_yourPositionText != null)
             {
-                _yourPositionText.text = playerEntry.HasValue
-                    ? $"Your position: #{playerEntry.Value.Rank}"
+                _yourPositionText.text = displayRank.HasValue
+                    ? $"Your position: #{displayRank.Value}"
                     : "Your position: —";
             }
 
             if (entries.Length == 0)
             {
                 _leaderboardStatusText.gameObject.SetActive(true);
-                _leaderboardStatusText.text = "Could not load scores.";
+                _leaderboardStatusText.text = _activeFilter == LeaderboardFilterMode.FriendsOnly
+                    ? "No friend scores available."
+                    : "Could not load scores.";
                 return;
             }
 
-            // Determine whether the current player is already visible in the top list
-            bool playerInTop = false;
-            for (int i = 0; i < entries.Length; i++)
-                if (entries[i].IsCurrentPlayer) { playerInTop = true; break; }
-
-            // Build top-15 rows
+            // Build rows
             for (int i = 0; i < entries.Length; i++)
             {
                 var row = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
                 row.Setup(entries[i], _goldMedal, _silverMedal, _bronzeMedal, i, _onAddFriend);
             }
 
-            // If the player is outside the top 15, append their row as #16
-            if (!playerInTop && playerEntry.HasValue)
+            // In Global mode, if player is outside top 15, append overflow row as #16
+            if (_activeFilter == LeaderboardFilterMode.Global && !currentInList.HasValue && globalPlayerEntry.HasValue)
             {
                 var overflowRow = Instantiate(_rowPrefab, _leaderboardRowContainer, false);
-                overflowRow.Setup(playerEntry.Value, _goldMedal, _silverMedal, _bronzeMedal, entries.Length, _onAddFriend);
+                overflowRow.Setup(globalPlayerEntry.Value, _goldMedal, _silverMedal, _bronzeMedal, entries.Length, _onAddFriend);
             }
         }
 
@@ -232,16 +293,28 @@ namespace StackSurge.Meta
             _ = RefreshLeaderboard();
         }
 
+        public void SetFilterMode(LeaderboardFilterMode filterMode)
+        {
+            if (_activeFilter == filterMode) return;
+            _activeFilter = filterMode;
+            RefreshLeaderboardScopeUi();
+            _ = RefreshLeaderboard();
+        }
+
         private void RefreshLeaderboardScopeUi()
         {
             if (_leaderboardTitleText != null)
             {
-                _leaderboardTitleText.text = _activeScope switch
+                string scopeStr = _activeScope switch
                 {
                     LeaderboardScope.Daily   => "DAILY LEADERBOARD",
                     LeaderboardScope.Weekly  => "WEEKLY LEADERBOARD",
                     _                        => "ALL-TIME LEADERBOARD",
                 };
+
+                _leaderboardTitleText.text = _activeFilter == LeaderboardFilterMode.FriendsOnly
+                    ? $"{scopeStr} (FRIENDS)"
+                    : scopeStr;
             }
 
             if (_dailyLeaderboardTabButton != null)
@@ -250,7 +323,11 @@ namespace StackSurge.Meta
                 _weeklyLeaderboardTabButton.interactable = _activeScope != LeaderboardScope.Weekly;
             if (_allTimeLeaderboardTabButton != null)
                 _allTimeLeaderboardTabButton.interactable = _activeScope != LeaderboardScope.AllTime;
+
+            if (_globalFilterButton != null)
+                _globalFilterButton.interactable = _activeFilter != LeaderboardFilterMode.Global;
+            if (_friendsFilterButton != null)
+                _friendsFilterButton.interactable = _activeFilter != LeaderboardFilterMode.FriendsOnly;
         }
     }
-
 }

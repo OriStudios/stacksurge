@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Threading.Tasks;
 using Unity.Services.Authentication;
 using Unity.Services.Leaderboards;
@@ -154,6 +156,68 @@ namespace StackSurge.Meta
             catch (Exception e)
             {
                 Debug.LogWarning("[LeaderboardService] Fetch failed: " + e.Message);
+                return Array.Empty<LeaderboardEntryData>();
+            }
+        }
+
+        // ── Fetch friend scores ─────────────────────────────────────────────
+        public async Task<LeaderboardEntryData[]> GetFriendsScoresAsync(
+            LeaderboardScope scope = LeaderboardScope.AllTime,
+            List<string> friendPlayerIds = null)
+        {
+            if (!_isOnline) return Array.Empty<LeaderboardEntryData>();
+
+            try
+            {
+                string currentId = AuthenticationService.Instance != null && AuthenticationService.Instance.IsSignedIn
+                    ? AuthenticationService.Instance.PlayerId
+                    : null;
+
+                var targetIds = new List<string>();
+                if (!string.IsNullOrEmpty(currentId))
+                    targetIds.Add(currentId);
+
+                if (friendPlayerIds != null)
+                {
+                    foreach (var id in friendPlayerIds)
+                    {
+                        if (!string.IsNullOrEmpty(id) && !targetIds.Contains(id))
+                            targetIds.Add(id);
+                    }
+                }
+
+                if (targetIds.Count == 0) return Array.Empty<LeaderboardEntryData>();
+
+                string leaderboardId = GetLeaderboardId(scope);
+                var resultPage = await LeaderboardsService.Instance.GetScoresByPlayerIdsAsync(leaderboardId, targetIds);
+
+                if (resultPage == null || resultPage.Results == null || resultPage.Results.Count == 0)
+                    return Array.Empty<LeaderboardEntryData>();
+
+                // Sort results by score descending
+                var sortedResults = resultPage.Results.OrderByDescending(r => r.Score).ToList();
+                var entries = new LeaderboardEntryData[sortedResults.Count];
+
+                for (int i = 0; i < sortedResults.Count; i++)
+                {
+                    LeaderboardEntry r = sortedResults[i];
+                    entries[i] = new LeaderboardEntryData
+                    {
+                        Rank            = i + 1, // Relative rank among friends
+                        PlayerId        = r.PlayerId,
+                        PlayerName      = string.IsNullOrEmpty(r.PlayerName)
+                                              ? FormatAnonymousId(r.PlayerId)
+                                              : r.PlayerName,
+                        Score           = r.Score,
+                        IsCurrentPlayer = r.PlayerId == currentId
+                    };
+                }
+
+                return entries;
+            }
+            catch (Exception e)
+            {
+                Debug.LogWarning("[LeaderboardService] GetFriendsScores failed: " + e.Message);
                 return Array.Empty<LeaderboardEntryData>();
             }
         }

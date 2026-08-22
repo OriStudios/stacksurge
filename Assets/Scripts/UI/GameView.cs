@@ -126,6 +126,7 @@ namespace StackSurge.UI
         private Button[] _colOverlayBtns;   // full-height transparent click zones
 
         public Action OnReplayTutorialTriggered;
+        public Action OnNotificationSettingsTriggered;
 
         void Awake()
         {
@@ -249,6 +250,49 @@ namespace StackSurge.UI
                 txt.alignment = TextAlignmentOptions.Center;
             }
 
+            // Append Notification Settings Button to Help Panel
+            if (_helpPanel != null)
+            {
+                var oldNotifBtn = _helpPanel.transform.Find("NotificationSettingsBtn");
+                if (oldNotifBtn != null) Destroy(oldNotifBtn.gameObject);
+
+                var notifBtnGo = new GameObject("NotificationSettingsBtn");
+                notifBtnGo.transform.SetParent(_helpPanel.transform, false);
+                var rt = notifBtnGo.AddComponent<RectTransform>();
+                rt.anchorMin = new Vector2(0.5f, 0f);
+                rt.anchorMax = new Vector2(0.5f, 0f);
+                rt.pivot = new Vector2(0.5f, 0f);
+                rt.anchoredPosition = new Vector2(0f, 155f);
+                rt.sizeDelta = new Vector2(340f, 80f);
+
+                var img = notifBtnGo.AddComponent<Image>();
+                img.color = new Color(0.2f, 0.45f, 0.85f, 0.95f);
+
+                var outline = notifBtnGo.AddComponent<Outline>();
+                outline.effectColor = new Color(0f, 0f, 0f, 0.3f);
+                outline.effectDistance = new Vector2(2f, 2f);
+
+                var btn = notifBtnGo.AddComponent<Button>();
+                btn.onClick.AddListener(() =>
+                {
+                    ToggleHelp();
+                    OnNotificationSettingsTriggered?.Invoke();
+                });
+
+                var txtGo = new GameObject("Text");
+                txtGo.transform.SetParent(notifBtnGo.transform, false);
+                var txtRt = txtGo.AddComponent<RectTransform>();
+                txtRt.anchorMin = Vector2.zero;
+                txtRt.anchorMax = Vector2.one;
+                txtRt.sizeDelta = Vector2.zero;
+                var txt = txtGo.AddComponent<TextMeshProUGUI>();
+                txt.text = "NOTIFICATIONS";
+                txt.fontSize = 24;
+                txt.fontStyle = FontStyles.Bold;
+                txt.color = Color.white;
+                txt.alignment = TextAlignmentOptions.Center;
+            }
+
             // Wire up the main menu buttons now that delegates are assigned
             InitMainMenu();
         }
@@ -314,6 +358,89 @@ namespace StackSurge.UI
                 _mainMenuHowToPlayButton.onClick.AddListener(ToggleHelp);
             }
             else Debug.LogWarning("[GameView] _mainMenuHowToPlayButton not assigned.");
+
+            // PROGRAMMATIC MAIN MENU BUTTONS (NOTIFICATIONS & HOW TO PLAY FALLBACK)
+            if (_mainMenuRoot != null)
+            {
+                // 1. Programmatic NOTIFICATIONS Button
+                var oldNotifBtn = _mainMenuRoot.transform.Find("ProgNotificationsBtn");
+                if (oldNotifBtn != null) Destroy(oldNotifBtn.gameObject);
+
+                var notifBtnGo = new GameObject("ProgNotificationsBtn");
+                notifBtnGo.transform.SetParent(_mainMenuRoot.transform, false);
+
+                var rtNotif = notifBtnGo.AddComponent<RectTransform>();
+                rtNotif.anchorMin = new Vector2(1f, 1f);
+                rtNotif.anchorMax = new Vector2(1f, 1f);
+                rtNotif.pivot = new Vector2(1f, 1f);
+                rtNotif.anchoredPosition = new Vector2(-40f, -40f);
+                rtNotif.sizeDelta = new Vector2(250f, 75f);
+
+                var imgNotif = notifBtnGo.AddComponent<Image>();
+                imgNotif.color = new Color(0.18f, 0.40f, 0.88f, 0.95f);
+
+                var outlineNotif = notifBtnGo.AddComponent<Outline>();
+                outlineNotif.effectColor = new Color(0f, 0f, 0f, 0.4f);
+                outlineNotif.effectDistance = new Vector2(2f, -2f);
+
+                var btnNotif = notifBtnGo.AddComponent<Button>();
+                btnNotif.onClick.AddListener(() => OnNotificationSettingsTriggered?.Invoke());
+
+                var txtNotifGo = new GameObject("Text");
+                txtNotifGo.transform.SetParent(notifBtnGo.transform, false);
+                var txtRtNotif = txtNotifGo.AddComponent<RectTransform>();
+                txtRtNotif.anchorMin = Vector2.zero;
+                txtRtNotif.anchorMax = Vector2.one;
+                txtRtNotif.sizeDelta = Vector2.zero;
+
+                var txtNotif = txtNotifGo.AddComponent<TextMeshProUGUI>();
+                txtNotif.text = "NOTIFICATIONS";
+                txtNotif.fontSize = 20;
+                txtNotif.fontStyle = FontStyles.Bold;
+                txtNotif.color = Color.white;
+                txtNotif.alignment = TextAlignmentOptions.Center;
+
+                // 2. Programmatic HOW TO PLAY Button (if Inspector button unassigned)
+                if (_mainMenuHowToPlayButton == null)
+                {
+                    var oldHelpBtn = _mainMenuRoot.transform.Find("ProgHelpBtn");
+                    if (oldHelpBtn != null) Destroy(oldHelpBtn.gameObject);
+
+                    var helpBtnGo = new GameObject("ProgHelpBtn");
+                    helpBtnGo.transform.SetParent(_mainMenuRoot.transform, false);
+
+                    var rtHelp = helpBtnGo.AddComponent<RectTransform>();
+                    rtHelp.anchorMin = new Vector2(1f, 1f);
+                    rtHelp.anchorMax = new Vector2(1f, 1f);
+                    rtHelp.pivot = new Vector2(1f, 1f);
+                    rtHelp.anchoredPosition = new Vector2(-40f, -125f);
+                    rtHelp.sizeDelta = new Vector2(250f, 75f);
+
+                    var imgHelp = helpBtnGo.AddComponent<Image>();
+                    imgHelp.color = new Color(0.95f, 0.70f, 0.20f, 0.95f);
+
+                    var outlineHelp = helpBtnGo.AddComponent<Outline>();
+                    outlineHelp.effectColor = new Color(0f, 0f, 0f, 0.4f);
+                    outlineHelp.effectDistance = new Vector2(2f, -2f);
+
+                    var btnHelp = helpBtnGo.AddComponent<Button>();
+                    btnHelp.onClick.AddListener(ToggleHelp);
+
+                    var txtHelpGo = new GameObject("Text");
+                    txtHelpGo.transform.SetParent(helpBtnGo.transform, false);
+                    var txtRtHelp = txtHelpGo.AddComponent<RectTransform>();
+                    txtRtHelp.anchorMin = Vector2.zero;
+                    txtRtHelp.anchorMax = Vector2.one;
+                    txtRtHelp.sizeDelta = Vector2.zero;
+
+                    var txtHelp = txtHelpGo.AddComponent<TextMeshProUGUI>();
+                    txtHelp.text = "HOW TO PLAY";
+                    txtHelp.fontSize = 20;
+                    txtHelp.fontStyle = FontStyles.Bold;
+                    txtHelp.color = Color.black;
+                    txtHelp.alignment = TextAlignmentOptions.Center;
+                }
+            }
 
             // VIBRATION TOGGLE  — assign _mainMenuVibrationToggle in the Inspector
             _vibrationEnabled = PlayerPrefs.GetInt("VibrationEnabled", 1) == 1;

@@ -169,6 +169,7 @@ namespace StackSurge
 
             _tutorialController = new TutorialController(this);
             _view.OnReplayTutorialTriggered = StartTutorial;
+            _view.OnNotificationSettingsTriggered = OpenNotificationSettings;
 
             // Game starts only after loading screen finishes fading
             _view.OnLoadingDone = OnLoadingScreenFinished;
@@ -205,13 +206,45 @@ namespace StackSurge
                         bool success = await _friendsService.SendFriendRequestAsync(targetPlayerId);
                         Debug.Log($"[StackSurgeGame] Leaderboard Add Friend to {targetPlayerId}: {(success ? "Success" : "Failed")}");
                     }
-                }
+                },
+                async (scope, friendIds) => await _leaderboardService.GetFriendsScoresAsync(scope, friendIds),
+                async () => _friendsService != null ? await _friendsService.GetFriendPlayerIdsAsync() : new System.Collections.Generic.List<string>()
             );
 
             _view.UpdateLoadingStatus(_provider.IsOnline ? "ONLINE" : "NO INTERNET, PLAYING OFFLINE");
             _challenges = new ChallengeTracker(_provider);
 
+            // Initialize Notification System & Programmatic Settings UI
+            NotificationService.EnsureInstance(_save);
+            NotificationService.Instance?.ScheduleStreakProtectionReminder();
+            NotificationService.Instance?.ScheduleLeaderboardResetReminder();
+            NotificationService.Instance?.ScheduleInactivityReminder();
+
+            GameObject notifSettingsObj = new GameObject("[NotificationSettingsUI]");
+            _notificationSettingsUI = notifSettingsObj.AddComponent<NotificationSettingsUI>();
+            _notificationSettingsUI.Initialize(_save);
+
             _view.EnableStartButton();
+        }
+
+        private NotificationSettingsUI _notificationSettingsUI;
+
+        public void OpenNotificationSettings()
+        {
+            if (_notificationSettingsUI != null)
+            {
+                _notificationSettingsUI.Show();
+            }
+        }
+
+        void OnApplicationPause(bool pauseStatus)
+        {
+            if (pauseStatus)
+            {
+                NotificationService.Instance?.ScheduleStreakProtectionReminder();
+                NotificationService.Instance?.ScheduleLeaderboardResetReminder();
+                NotificationService.Instance?.ScheduleInactivityReminder();
+            }
         }
 
         void Start()
@@ -221,6 +254,15 @@ namespace StackSurge
 
         void Update()
         {
+#if UNITY_EDITOR || DEVELOPMENT_BUILD
+            var keyboard = Keyboard.current;
+            if (keyboard != null)
+            {
+                if (keyboard.nKey.wasPressedThisFrame) OpenNotificationSettings();
+                if (keyboard.hKey.wasPressedThisFrame && _view != null) _view.ToggleHelp();
+            }
+#endif
+
             if (!_playing || _resolvingMatches || _inTutorial) return;
 
             _timeAlive += Time.deltaTime;
