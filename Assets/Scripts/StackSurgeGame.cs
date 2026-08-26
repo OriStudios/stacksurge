@@ -188,7 +188,7 @@ namespace StackSurge
             // Ensure Friends SDK is initialized and publish Online presence
             _ = _friendsService.EnsureInitializedAsync();
 
-            _leaderboardService = new LeaderboardService(_provider.IsOnline, _save);
+            _leaderboardService = new LeaderboardService(_provider.IsOnline, _save, _friendsService);
             _leaderboardManager.SetLeaderboardCallbacks(
                 scope => _leaderboardService.GetTopScoresAsync(scope),
                 scope => _leaderboardService.GetPlayerEntryAsync(scope),
@@ -216,6 +216,7 @@ namespace StackSurge
 
             // Initialize Notification System & Programmatic Settings UI
             NotificationService.EnsureInstance(_save);
+            NotificationService.Instance?.CancelAllScheduledNotifications();
             NotificationService.Instance?.ScheduleStreakProtectionReminder();
             NotificationService.Instance?.ScheduleLeaderboardResetReminder();
             NotificationService.Instance?.ScheduleInactivityReminder();
@@ -241,6 +242,7 @@ namespace StackSurge
         {
             if (pauseStatus)
             {
+                NotificationService.Instance?.CancelAllScheduledNotifications();
                 NotificationService.Instance?.ScheduleStreakProtectionReminder();
                 NotificationService.Instance?.ScheduleLeaderboardResetReminder();
                 NotificationService.Instance?.ScheduleInactivityReminder();

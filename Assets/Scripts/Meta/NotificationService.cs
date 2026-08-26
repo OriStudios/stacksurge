@@ -1,8 +1,12 @@
 using System;
+using System.Collections.Generic;
 using System.Threading.Tasks;
 using StackSurge.UI;
 using UnityEngine;
-using Unity.Services.PushNotifications;
+using Unity.Services.Analytics;
+using Unity.Services.Authentication;
+using Unity.Services.CloudCode;
+using OneSignalSDK;
 
 #if UNITY_ANDROID
 using Unity.Notifications.Android;
@@ -41,51 +45,103 @@ namespace StackSurge.Meta
             if (_isInitialized) return;
 
             SetupNotificationChannels();
-            _ = RequestPermissionsAsync();
-            _ = RegisterPushTokenAsync();
+            _ = InitOneSignalAndPermissionsAsync();
 
             _isInitialized = true;
             Debug.Log("[NotificationService] Initialized notification channels and permissions check.");
         }
 
-        private async Task RegisterPushTokenAsync()
+        private async Task InitOneSignalAndPermissionsAsync()
         {
-#if UNITY_EDITOR
-            Debug.Log("[NotificationService] Skipping push token registration — not supported in Unity Editor. Run on a real device.");
-            await Task.CompletedTask;
-#else
+#if !UNITY_EDITOR
             try
             {
-                // Must subscribe BEFORE calling RegisterForPushNotificationsAsync
-                PushNotificationsService.Instance.OnRemoteNotificationReceived += OnRemotePushReceived;
-
-                string token = await PushNotificationsService.Instance.RegisterForPushNotificationsAsync();
-                Debug.Log($"[NotificationService] Device push token: {token}");
-
-                if (_save != null && !string.IsNullOrEmpty(token))
+                // 1. Initialize OneSignal SDK first
+                string appId = OneSignalPushHelper.AppId;
+                if (!string.IsNullOrEmpty(appId))
                 {
-                    _save.DevicePushToken = token;
-                    LocalProgress.Save(_save);
+                    OneSignal.Initialize(appId);
+                    Debug.Log($"[NotificationService] OneSignal SDK initialized with App ID: {appId}");
+
+                    // Listen to incoming foreground notifications
+                    OneSignal.Notifications.ForegroundWillDisplay += (sender, notificationEvent) =>
+                    {
+                        var notif = notificationEvent.Notification;
+                        Debug.Log($"[OneSignal] Foreground Notification Received: {notif.Title} - {notif.Body}");
+                        InAppNotificationView.Show(notif.Title, notif.Body, NotificationType.Reminder);
+                    };
+
+                    // Prompt for Push Permission (Android 13+ / iOS)
+                    OneSignal.Notifications.RequestPermissionAsync(true);
                 }
+
+                // 2. Start Analytics collection
+                AnalyticsService.Instance.StartDataCollection();
+
+                // 3. Bind PlayerId to OneSignal if signed in
+                if (AuthenticationService.Instance != null && AuthenticationService.Instance.IsSignedIn)
+                {
+                    string playerId = AuthenticationService.Instance.PlayerId;
+                    BindUserToPushService(playerId);
+                }
+
+                AnalyticsService.Instance.Flush();
             }
             catch (System.Exception ex)
             {
-                Debug.LogWarning($"[NotificationService] Push token registration failed: {ex.Message}");
+                Debug.LogWarning($"[NotificationService] OneSignal setup warning: {ex.Message}");
             }
+#else
+            Debug.Log("[NotificationService] Skipping push token registration — not supported in Unity Editor. Run on a real device.");
 #endif
+            await Task.CompletedTask;
         }
 
-        private void OnRemotePushReceived(System.Collections.Generic.Dictionary<string, object> payload)
+        /// <summary>
+        /// Binds the authenticated UGS PlayerId to OneSignal Remote Push Service.
+        /// </summary>
+        public void BindUserToPushService(string playerId)
         {
-            string title = payload.ContainsKey("title") ? payload["title"].ToString() : "StackSurge";
-            string body  = payload.ContainsKey("body")  ? payload["body"].ToString()  : "";
-            Debug.Log($"[NotificationService] Push received — {title}: {body}");
+            if (string.IsNullOrEmpty(playerId)) return;
+
+            try
+            {
+#if !UNITY_EDITOR
+                OneSignal.Login(playerId);
+#endif
+                Debug.Log($"[NotificationService] Bound UGS PlayerId '{playerId}' to OneSignal Remote Push.");
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[NotificationService] OneSignal.Login warning: {ex.Message}");
+            }
+
+            if (_save != null)
+            {
+                _save.DevicePushToken = playerId;
+                LocalProgress.Save(_save);
+            }
+        }
+
+        private void OnRemotePushReceived(string title, string body)
+        {
+            Debug.Log($"[NotificationService] Remote push received — {title}: {body}");
             InAppNotificationView.Show(title, body, NotificationType.Reminder);
         }
 
         private void SetupNotificationChannels()
         {
 #if UNITY_ANDROID
+            // Fallback / Default Channels for Unity Dashboard campaigns
+            var defaultChannel = new AndroidNotificationChannel()
+            {
+                Id = "default",
+                Name = "General Notifications",
+                Importance = Importance.High,
+                Description = "General game updates and push notifications",
+            };
+            AndroidNotificationCenter.RegisterNotificationChannel(defaultChannel);
+
             // Leaderboard Drop Channel
             var leaderboardChannel = new AndroidNotificationChannel()
             {
@@ -120,6 +176,17 @@ namespace StackSurge.Meta
 
         public async Task RequestPermissionsAsync()
         {
+#if !UNITY_EDITOR && (UNITY_ANDROID || UNITY_IOS)
+            try
+            {
+                OneSignal.Notifications.RequestPermissionAsync(true);
+            }
+            catch (Exception ex)
+            {
+                Debug.LogWarning($"[NotificationService] OneSignal permission request warning: {ex.Message}");
+            }
+#endif
+
 #if UNITY_ANDROID
             if (UnityEngine.Android.Permission.HasUserAuthorizedPermission("android.permission.POST_NOTIFICATIONS") == false)
             {
@@ -181,22 +248,15 @@ namespace StackSurge.Meta
             LocalProgress.Save(_save);
 
             InAppNotificationView.Show(title, message, NotificationType.LeaderboardDrop);
-
-            ScheduleLocalNotification(
-                title,
-                message,
-                DateTime.Now.AddMinutes(5),
-                LeaderboardChannelId
-            );
         }
 
         private int GetSavedRank(LeaderboardScope scope)
         {
             return scope switch
             {
-                LeaderboardScope.Daily   => _save.LastKnownRankDaily,
-                LeaderboardScope.Weekly  => _save.LastKnownRankWeekly,
-                _                        => _save.LastKnownRankAllTime,
+                LeaderboardScope.Daily => _save.LastKnownRankDaily,
+                LeaderboardScope.Weekly => _save.LastKnownRankWeekly,
+                _ => _save.LastKnownRankAllTime,
             };
         }
 
@@ -204,59 +264,123 @@ namespace StackSurge.Meta
         {
             switch (scope)
             {
-                case LeaderboardScope.Daily:   _save.LastKnownRankDaily   = rank; break;
-                case LeaderboardScope.Weekly:  _save.LastKnownRankWeekly  = rank; break;
-                default:                       _save.LastKnownRankAllTime = rank; break;
+                case LeaderboardScope.Daily: _save.LastKnownRankDaily = rank; break;
+                case LeaderboardScope.Weekly: _save.LastKnownRankWeekly = rank; break;
+                default: _save.LastKnownRankAllTime = rank; break;
             }
         }
 
 
         // ── Friend Activity Events ─────────────────────────────────────────
-        public void NotifyFriendRequestReceived(string senderName)
+
+        /// <summary>
+        /// Shows an in-app toast to the SENDER that their request was sent,
+        /// and triggers a Cloud Code push to the RECIPIENT's device via OneSignal.
+        /// </summary>
+        public void NotifyFriendRequestReceived(string senderName, string targetPlayerId = null)
         {
             if (_save != null && !_save.NotifyFriendActivity) return;
 
-            string title = "New Friend Request!";
-            string message = $"{senderName} sent you a friend request. Accept it to compete on the Friends Leaderboard!";
+            // In-app confirmation for the sender (currently open)
+            InAppNotificationView.Show("Friend Request Sent!",
+                $"Your friend request to {targetPlayerId ?? "that player"} has been sent.",
+                NotificationType.FriendActivity);
 
-            InAppNotificationView.Show(title, message, NotificationType.FriendActivity);
-
-            ScheduleLocalNotification(
-                title,
-                message,
-                DateTime.Now.AddSeconds(2),
-                FriendsChannelId
-            );
+            // Push to the RECIPIENT via Cloud Code (secure – API key never leaves the server)
+            if (!string.IsNullOrEmpty(targetPlayerId))
+            {
+                _ = CallCloudCodePushAsync("NotifyFriendRequest", new Dictionary<string, object>
+                {
+                    { "recipientPlayerId",  targetPlayerId },
+                    { "senderDisplayName", senderName }
+                });
+            }
         }
 
-        public void NotifyFriendRequestAccepted(string friendName)
+        /// <summary>
+        /// Shows an in-app toast and triggers a Cloud Code push to the ORIGINAL SENDER
+        /// letting them know their request was accepted.
+        /// </summary>
+        public void NotifyFriendRequestAccepted(string friendName, string originalSenderPlayerId = null)
         {
             if (_save != null && !_save.NotifyFriendActivity) return;
 
-            string title = "Friend Request Accepted!";
-            string message = $"{friendName} accepted your friend request! You can now view their high scores.";
+            // In-app toast for the person who just accepted
+            InAppNotificationView.Show("Friend Request Accepted!",
+                $"You and {friendName} are now friends! Compete on the Friends Leaderboard.",
+                NotificationType.FriendActivity);
 
-            InAppNotificationView.Show(title, message, NotificationType.FriendActivity);
+            // Push to the ORIGINAL SENDER via Cloud Code
+            if (!string.IsNullOrEmpty(originalSenderPlayerId))
+            {
+                string myName = _save?.PlayerDisplayName ?? "A StackSurge Player";
+                _ = CallCloudCodePushAsync("NotifyFriendRequestAccepted", new Dictionary<string, object>
+                {
+                    { "originalSenderPlayerId", originalSenderPlayerId },
+                    { "acceptorDisplayName",    myName }
+                });
+            }
         }
 
-        public void NotifyFriendBeatScore(string friendName, int newScore)
+        /// <summary>
+        /// Shows an in-app toast and triggers a Cloud Code push to the FRIEND whose score was beaten.
+        /// </summary>
+        public void NotifyFriendBeatScore(string friendName, int newScore, string beatenFriendPlayerId = null, string scope = null)
         {
             if (_save != null && !_save.NotifyFriendActivity) return;
 
-            string title = "Friend Beat Your High Score!";
-            string message = $"{friendName} just scored {newScore} points and passed you on the Friends Leaderboard!";
+            // In-app toast for the local player who just set the high score
+            InAppNotificationView.Show("New High Score!",
+                $"You beat {friendName}'s score with {newScore} points!",
+                NotificationType.FriendActivity);
 
-            InAppNotificationView.Show(title, message, NotificationType.FriendActivity);
-
-            ScheduleLocalNotification(
-                title,
-                message,
-                DateTime.Now.AddSeconds(5),
-                FriendsChannelId
-            );
+            // Push to the BEATEN FRIEND via Cloud Code
+            if (!string.IsNullOrEmpty(beatenFriendPlayerId))
+            {
+                string myName = _save?.PlayerDisplayName ?? "A StackSurge Player";
+                _ = CallCloudCodePushAsync("NotifyFriendBeatScore", new Dictionary<string, object>
+                {
+                    { "beatenFriendPlayerId", beatenFriendPlayerId },
+                    { "scorerDisplayName",    myName },
+                    { "newScore",             newScore },
+                    { "leaderboardScope",     scope ?? "AllTime" }
+                });
+            }
         }
+
+        /// <summary>
+        /// Calls a UGS Cloud Code Script endpoint and passes parameters.
+        /// The Cloud Code script holds the OneSignal REST API key securely on the server.
+        /// </summary>
+        private async Task CallCloudCodePushAsync(string scriptName, Dictionary<string, object> args)
+        {
+            try
+            {
+                await CloudCodeService.Instance.CallEndpointAsync(scriptName, args);
+                Debug.Log($"[NotificationService] Cloud Code push dispatched: {scriptName}");
+            }
+            catch (Exception ex)
+            {
+                // Non-fatal: in-app toast already shown, remote push is best-effort
+                Debug.LogWarning($"[NotificationService] Cloud Code push '{scriptName}' failed: {ex.Message}");
+            }
+        }
+
+        // Fixed notification IDs for recurring reminders (prevents duplicate stacking)
+        public const int StreakReminderNotificationId = 1001;
+        public const int LeaderboardResetNotificationId = 1002;
+        public const int InactivityReminderNotificationId = 1003;
 
         // ── Scheduled Reminders ─────────────────────────────────────────────
+        public void CancelAllScheduledNotifications()
+        {
+#if UNITY_ANDROID
+            AndroidNotificationCenter.CancelAllScheduledNotifications();
+#elif UNITY_IOS
+            iOSNotificationCenter.RemoveAllScheduledNotifications();
+#endif
+        }
+
         public void ScheduleStreakProtectionReminder()
         {
             if (_save != null && !_save.NotifyReminders) return;
@@ -272,7 +396,9 @@ namespace StackSurge.Meta
                 "Protect Your Daily Streak! 🔥",
                 $"You have a {_save.Streak}-day streak! Play StackSurge today to keep your streak multiplier active.",
                 targetTime,
-                RemindersChannelId
+                RemindersChannelId,
+                StreakReminderNotificationId,
+                "streak_reminder"
             );
         }
 
@@ -290,7 +416,9 @@ namespace StackSurge.Meta
                     "Leaderboard Resetting Soon! 🏆",
                     "The Daily Leaderboard resets in 2 hours. Stack high and lock in your top ranking!",
                     targetLocal,
-                    RemindersChannelId
+                    RemindersChannelId,
+                    LeaderboardResetNotificationId,
+                    "leaderboard_reset_reminder"
                 );
             }
         }
@@ -304,12 +432,20 @@ namespace StackSurge.Meta
                 "We Miss You in StackSurge! 🧱",
                 "Your high score is waiting! Jump back in and see if you can break your personal record.",
                 DateTime.Now.AddDays(3),
-                RemindersChannelId
+                RemindersChannelId,
+                InactivityReminderNotificationId,
+                "inactivity_reminder"
             );
         }
 
         // ── Low-Level Local Notification Dispatcher ─────────────────────────
-        public void ScheduleLocalNotification(string title, string body, DateTime fireTime, string channelId)
+        public void ScheduleLocalNotification(
+            string title, 
+            string body, 
+            DateTime fireTime, 
+            string channelId, 
+            int notificationId = -1, 
+            string iosIdentifier = null)
         {
 #if UNITY_ANDROID
             var androidNotif = new AndroidNotification
@@ -320,7 +456,15 @@ namespace StackSurge.Meta
                 SmallIcon = "icon_small",
                 LargeIcon = "icon_large"
             };
-            AndroidNotificationCenter.SendNotification(androidNotif, channelId);
+
+            if (notificationId > 0)
+            {
+                AndroidNotificationCenter.SendNotificationWithExplicitID(androidNotif, channelId, notificationId);
+            }
+            else
+            {
+                AndroidNotificationCenter.SendNotification(androidNotif, channelId);
+            }
 #elif UNITY_IOS
             var timeTrigger = new iOSNotificationCalendarTrigger
             {
@@ -334,7 +478,7 @@ namespace StackSurge.Meta
 
             var iosNotif = new iOSNotification
             {
-                Identifier = Guid.NewGuid().ToString(),
+                Identifier = string.IsNullOrEmpty(iosIdentifier) ? Guid.NewGuid().ToString() : iosIdentifier,
                 Title = title,
                 Body = body,
                 ShowInForeground = true,

@@ -129,8 +129,11 @@ namespace StackSurge.UI
             _bodyText.textWrappingMode = TextWrappingModes.Normal;
             _bodyText.overflowMode = TextOverflowModes.Truncate;
             _bodyText.enableAutoSizing = false;
-            RectTransform bodyRect = bodyObj.AddComponent<RectTransform>();
-            bodyRect.sizeDelta = new Vector2(790, 90);
+            RectTransform bodyRect = bodyObj.GetComponent<RectTransform>();
+            if (bodyRect != null)
+            {
+                bodyRect.sizeDelta = new Vector2(790, 90);
+            }
 
             // Dismiss Button overlay
             Button dismissBtn = panelObj.AddComponent<Button>();

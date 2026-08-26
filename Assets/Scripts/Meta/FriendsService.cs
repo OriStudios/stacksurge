@@ -421,10 +421,12 @@ namespace StackSurge.Meta
                 TrackOutgoingRequest(cleanInput);
 
                 // 1. Try adding by display name first
+                string myName = _save != null && !string.IsNullOrEmpty(_save.PlayerDisplayName) ? _save.PlayerDisplayName : "A StackSurge Player";
                 try
                 {
                     await UgsFriendsService.Instance.AddFriendByNameAsync(cleanInput);
                     Debug.Log($"[FriendsService] Friend request sent by username: {cleanInput}");
+                    NotificationService.Instance?.NotifyFriendRequestReceived(myName, cleanInput);
                     await ForceRefreshAsync();
                     OnFriendsUpdated?.Invoke();
                     return true;
@@ -437,6 +439,7 @@ namespace StackSurge.Meta
                 // 2. Try adding by Player ID directly
                 await UgsFriendsService.Instance.AddFriendAsync(cleanInput);
                 Debug.Log($"[FriendsService] Friend request sent by Player ID: {cleanInput}");
+                NotificationService.Instance?.NotifyFriendRequestReceived(myName, cleanInput);
                 await ForceRefreshAsync();
                 OnFriendsUpdated?.Invoke();
                 return true;
@@ -496,6 +499,10 @@ namespace StackSurge.Meta
                 // In UGS Friends, calling AddFriendAsync with an existing requester memberId accepts the request
                 await UgsFriendsService.Instance.AddFriendAsync(targetPlayerIdOrRelationshipId);
                 Debug.Log($"[FriendsService] Friend request accepted for target: {targetPlayerIdOrRelationshipId}");
+
+                string myName = _save != null && !string.IsNullOrEmpty(_save.PlayerDisplayName) ? _save.PlayerDisplayName : "A StackSurge Player";
+                NotificationService.Instance?.NotifyFriendRequestAccepted(myName, targetPlayerIdOrRelationshipId);
+
                 await ForceRefreshAsync();
                 OnFriendsUpdated?.Invoke();
                 return true;

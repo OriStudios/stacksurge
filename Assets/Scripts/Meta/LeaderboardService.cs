@@ -43,13 +43,15 @@ namespace StackSurge.Meta
         const string AllTimeLeaderboardId = "all_time_highs";
         const int    TopCount             = 15;
 
-        readonly bool     _isOnline;
-        readonly SaveData _save;
+        readonly bool           _isOnline;
+        readonly SaveData       _save;
+        readonly FriendsService _friendsService;
 
-        public LeaderboardService(bool isOnline, SaveData save)
+        public LeaderboardService(bool isOnline, SaveData save, FriendsService friendsService = null)
         {
-            _isOnline = isOnline;
-            _save     = save;
+            _isOnline       = isOnline;
+            _save           = save;
+            _friendsService = friendsService;
 
             // Flush any score that was queued while the player was offline
             if (_isOnline && _save != null && _save.PendingLeaderboardScore >= 0)
@@ -109,6 +111,30 @@ namespace StackSurge.Meta
                 catch (Exception e)
                 {
                     Debug.LogWarning($"[LeaderboardService] Submit failed for '{leaderboardId}': " + e.Message);
+                }
+            }
+
+            // Check if any friends' scores were beaten
+            if (_friendsService != null)
+            {
+                try
+                {
+                    var friendIds = await _friendsService.GetFriendPlayerIdsAsync();
+                    if (friendIds != null && friendIds.Count > 0)
+                    {
+                        var friendEntries = await GetFriendsScoresAsync(LeaderboardScope.AllTime, friendIds);
+                        foreach (var friend in friendEntries)
+                        {
+                            if (!friend.IsCurrentPlayer && friend.Score > 0 && score > friend.Score)
+                            {
+                                NotificationService.Instance?.NotifyFriendBeatScore(friend.PlayerName, score, friend.PlayerId, "AllTime");
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    Debug.LogWarning($"[LeaderboardService] Check beaten friend scores warning: {ex.Message}");
                 }
             }
         }

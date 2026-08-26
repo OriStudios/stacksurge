@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1093614613148",
+    "project_id": "stack-surge-537c6",
+    "storage_bucket": "stack-surge-537c6.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1093614613148:android:80876149e4f507937ff359",
+        "android_client_info": {
+          "package_name": "com.supercollide.stacksurge"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyB6Dn_bxOkzDFvCU3kCcJATdJVMofIZlLg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
