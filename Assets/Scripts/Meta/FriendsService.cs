@@ -500,8 +500,8 @@ namespace StackSurge.Meta
                 await UgsFriendsService.Instance.AddFriendAsync(targetPlayerIdOrRelationshipId);
                 Debug.Log($"[FriendsService] Friend request accepted for target: {targetPlayerIdOrRelationshipId}");
 
-                string myName = _save != null && !string.IsNullOrEmpty(_save.PlayerDisplayName) ? _save.PlayerDisplayName : "A StackSurge Player";
-                NotificationService.Instance?.NotifyFriendRequestAccepted(myName, targetPlayerIdOrRelationshipId);
+                string targetFriendName = FormatPlayerId(targetPlayerIdOrRelationshipId);
+                NotificationService.Instance?.NotifyFriendRequestAccepted(targetFriendName, targetPlayerIdOrRelationshipId);
 
                 await ForceRefreshAsync();
                 OnFriendsUpdated?.Invoke();
